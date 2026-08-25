@@ -7,7 +7,7 @@ description: 跨 agent KB 健康度维护。**触发信号**：每周/长会话�
 
 定期对 agenote 记事本执行策展，保持健康度并优化检索权重；同时支持从多个 AI 编程工具抽取对话、跨 agent reconcile 多源 memory。
 
-> agenote 已改造为 MCP server，以下 `agenote_*` 均为 MCP tool 名。底层 CLI 为 `agenote`（`~/.local/bin/agenote`），默认操作 agenote 子库（`~/Documents/Org/agenote/`，与 MCP server 对齐），`--domain human` 切到人类知识库根。
+> 全部操作通过 `agenote` CLI（`~/.local/bin/agenote`）完成，MCP 接口已移除。默认操作 agenote 子库（`~/Documents/Org/agenote/`），`--domain human` 切到人类知识库根。
 
 ## 何时策展
 
@@ -17,14 +17,14 @@ description: 跨 agent KB 健康度维护。**触发信号**：每周/长会话�
 - 新增了对话源或更新了 XDG 环境变量
 - 用户主动要求 `/agenote-curate`
 
-## 一键策展（MCP 流水线）
+## 一键策展
 
-```
-agenote_curate()        # 机械阶段：Step 1 + Step 2（KB 内策展 + reconcile）
+```bash
+agenote curate          # 机械阶段：Step 1 + Step 2（KB 内策展 + reconcile）
 # Step 3（Agent 综合）由你在 curate 后手动驱动，见下文
 ```
 
-`agenote_curate()` 执行**机械阶段 2 步**（无 LLM）；Step 3 是可选的 **agent 综合阶段**，读 dream 候选后用 `agenote_add` 写新卡片：
+`agenote curate` 执行**机械阶段 2 步**（无 LLM）；Step 3 是可选的 **agent 综合阶段**，读 dream 候选后用 `agenote add` 写新卡片：
 
 ### Step 1 — KB 内策展（5 步）
 
@@ -36,37 +36,37 @@ agenote_curate()        # 机械阶段：Step 1 + Step 2（KB 内策展 + reconc
 
 ### Step 2 — 跨 agent reconcile
 
-按 `ag_lib/extract/__init__.py` 的 `_resolve_extractors()` 注册顺序跑全部 source，结果写到 `.reconcile/index.json`。**写入层自动过滤元消息噪声**（TodoWrite / system-reminder / checkpoint 等源自 harness 注入而非用户经验的内容，判据见 `ag_lib.core.is_noise_fact`）。
+按 `agenote/extract/__init__.py` 的 `_resolve_extractors()` 注册顺序跑全部 source，结果写到 `.reconcile/index.json`。**写入层自动过滤元消息噪声**（TodoWrite / system-reminder / checkpoint 等源自 harness 注入而非用户经验的内容，判据见 `agenote.core.is_noise_fact`）。
 
 ### Step 3 — Agent 综合（从 reconcile 事实提炼新 KB 卡片）
 
-`agenote_dream()` 返回 ≤`limit` 个候选（默认 5，可调）。每个候选含：
+`agenote dream` 返回 ≤`limit` 个候选（默认 5，可调）。每个候选含：
 
 - `term`：触发候选的高频关键词
 - `frequency`：该词在窗口内出现的次数（df）
 - `score`：综合质量评分（IDF × √df × 形态学权重，越大越值得沉淀）
 - `representative_title` + `representative_content`：代表事实（词密度最高那条）
-- `source_trace`：溯源指针（= reconcile fact id，**调 `agenote_trace` 用**）
+- `source_trace`：溯源指针（= reconcile fact id，**调 `agenote trace` 用**）
 - `suggested_category`：映射后的 kb category
 - `source_facts`：贡献该词的事实 id 列表
 
-**dream 不自动写 KB**——综合决策交给 agent（读候选 → 判断 → `agenote_add`）：
+**dream 不自动写 KB**——综合决策交给 agent（读候选 → 判断 → `agenote add`）：
 
 1. 读 dream 候选的 `representative_content`（**索引层摘要，已截断**——见下方溯源）
-2. **需深入判断时调 `agenote_trace(fact_id=candidate.source_trace)` 读完整原始对话**
+2. **需深入判断时调 `agenote trace --id <candidate.source_trace>` 读完整原始对话**
    （含工具调用/推理/补丁，索引层这些都丢失了）。token 经济性：按需展开，不要无差别调
 3. 判断该主题是否值得沉淀为 KB 卡片（应用下方"策展原则"的应记录/不应记录判据）
-4. 值得 → `agenote_add(title=..., entry="note", category=<candidate.suggested_category>, body=...)`，body 引用 `source_facts` 中的 ID 以保留溯源
-5. 已被现有 KB 卡片覆盖 → 跳过（或 `agenote_touch` 已有卡片标记复用）
+4. 值得 → `agenote add --title ... --entry note --category <suggested_category> --stdin`，正文引用 `source_facts` 中的 ID 以保留溯源
+5. 已被现有 KB 卡片覆盖 → 跳过（或 `agenote touch <已有ID>` 标记复用）
 6. 矛盾/已被取代 → 按"矛盾调和规则"处理旧卡
 
 **为什么需要 trace**：reconcile 索引层 `content` 是 extractor 建索引时的**截断摘要**
 （opencode/zcode：user 截 1000 字、assistant 截 2000 字、tool/patch 退化为 `[tool: name]` 标记）。
 要判断一个 dream 候选是否真的有具体经验价值，必须读真实完整对话——这正是
-`agenote_trace` 的职责。dream 候选的 `score` 反映"统计上像经验词"，`agenote_trace` 让你
+`agenote trace` 的职责。dream 候选的 `score` 反映“统计上像经验词”，`agenote trace` 让你
 确认"语义上确实是有用经验"。
 
-**dream 参数**（MCP/CLI 对齐）：
+**dream 参数**（与 `agenote dream` CLI 同源）：
 
 - `window_days`：时间窗口（天），默认 90 覆盖 ~90% facts。0=不过滤。`0/7/30/90/180`
   窗口在真实数据上分别幸存 100%/7%/37%/93%/100% facts
@@ -74,8 +74,8 @@ agenote_curate()        # 机械阶段：Step 1 + Step 2（KB 内策展 + reconc
   **注意 offset 不稳定**：候选排序随 reconcile 索引更新漂移，`report.snapshot_hash`
   标识本次候选集指纹——两次调用指纹不同即说明排序已变，同一 offset 可能指向不同候选
 - `limit`：本次最多返回 N 个候选（默认 5）
-- `dry_run`：**已废弃，无效果**——dream 是纯只读候选发现器，绝不自动写 KB。
-  综合写入由你主导（见上方 Step 3）。该参数保留仅为向后兼容
+- `--dry-run`：**已废弃，无效果**——dream 是纯只读候选发现器，绝不自动写 KB。
+  综合写入由你主导（见上方 Step 3）。该 flag 保留仅为向后兼容
 - 无 timestamp 的 fact（hermes 30 条）**默认保留**，不受窗口影响
 
 **评分算法（IDF × √df × 形态学，TF 作 tie-breaker）**：
@@ -100,12 +100,9 @@ agenote_curate()        # 机械阶段：Step 1 + Step 2（KB 内策展 + reconc
 ### 第 0 步：提取对话
 
 ```bash
-# MCP tool（agent 主循环用）：agenote_extract(source="all")
-# CLI 等价（底层走 ag_lib/extract/ 多源抽取器）：
-agenote extract --source all --output ~/Documents/Org/conversations/$(date -d yesterday +%Y-%m-%d)
-```
+# 底层走 agenote/extract/ 多源抽取器；输出固定到 conversations/<date>/（--output-dir 可覆盖）
+agenote extract --source all --date $(date -d yesterday +%Y-%m-%d)
 
-> 注：`agenote extract` 子命令尚未在 CLI 暴露（抽取逻辑在 `ag_lib/extract/`，当前仅通过 `agenote_extract` MCP tool 调用）。CLI 批处理场景请用 MCP tool，或直接调 `python3 -m ag_lib.extract`。
 
 ### 第 1 步：诊断
 
@@ -187,7 +184,7 @@ agenote commit -m "策展: (agenote) <一句话总结: 新增 K 张 / 更新 M �
 
 commit message 要求：以 `策展:` 前缀开头，50 字以内总结核心操作（新增 K 张 / 更新 M 张 / 晋升 P 条）。无变更时跳过（agenote commit 会提示"没有待提交的变更"）。
 
-**MCP 路径**：经 MCP 调用时用 `agenote_commit(message=..., dry_run=True)` 先预览将提交的文件清单，确认后 `dry_run=False` 真提交（默认 dry_run=True 安全）。
+**预览路径**：`agenote commit -m "..." --dry-run` 先预览将提交的文件清单，去掉 `--dry-run` 真提交。
 
 **阶段拆分规则**：若本轮同时有「遗留未提交改动」和「本次新策展产物」，应**分两个 commit**（先提交遗留，再提交本轮），不混在一起，保持历史可读。
 
@@ -252,7 +249,7 @@ deprecated: X 条
 
 ## 权重机制（spec §7）
 
-检索时 agenote_search 跨域扫描人类（weight 默认 1.5）+ agent（weight 默认 1.0）+ reconcile（weight 0.6-0.7）卡片，最终分数 = 原始相关度 × WEIGHT。
+检索时 `agenote search` 跨域扫描人类（weight 默认 1.5）+ agent（weight 默认 1.0）+ reconcile（weight 0.6-0.7）卡片，最终分数 = 原始相关度 × WEIGHT。
 
 **curate 时的权重重分配公式**：
 
@@ -271,78 +268,69 @@ deprecated: X 条
 
 ## 数据源
 
-抽取器实现在 `ag_lib/extract/`，源列表与路径以代码为准（当前 7 源：opencode/crush/codex/claude/pi/hermes/zcode）。新增源参考任一现有 extractor 的签名 `() -> tuple[list[ReconciledFact], list[str]]`，在 `ag_lib/extract/__init__.py` 的 `_resolve_extractors()` 注册即可。
+抽取器实现在 `agenote/extract/`，源列表与路径以代码为准（当前 7 源：opencode/crush/codex/claude/pi/hermes/zcode）。新增源参考任一现有 extractor 的签名 `() -> tuple[list[ReconciledFact], list[str]]`，在 `agenote/extract/__init__.py` 的 `_resolve_extractors()` 注册即可。
 
 **三重只读保护**（所有 extractor 共享）：SQLite `mode=ro` + `PRAGMA query_only=1` + 仅 SELECT；JSONL 仅读；文件缺失返回 `([], [msg])` 不抛异常。
 
-## 手动维护命令（MCP tool）
+## 手动维护命令（CLI）
 
+```bash
+agenote health                            # KB 健康度
+agenote deduplicate                       # 只检测重复
+agenote archive --stale                   # 只归档陈旧
+agenote archive --list                    # 列出已归档
+agenote restore <ID>                      # 恢复归档卡片
+agenote reindex                           # 只重建索引
+agenote memory --stale                    # 陈旧记忆
+agenote extract --source all --dry-run    # 抽取原始对话为 Org 文件（不落盘）
+agenote extract --source claude --date 2026-06-29   # 指定源 + 日期
+agenote trace --id opencode:ses_x:msg_y   # 回查 dream 候选的完整原始对话（不截断）
 ```
-agenote_health()                          # KB 健康度
-agenote_deduplicate()                     # 只检测重复
-agenote_archive(stale=True)               # 只归档陈旧
-agenote_archive(list_cards=True)          # 列出已归档
-agenote_restore(target="<ID>")            # 恢复归档卡片
-agenote_reindex()                         # 只重建索引
-agenote_memory_search(stale=True)         # 陈旧记忆
-agenote_extract(source="all", dry_run=True)    # 抽取原始对话为 Org 文件（不落盘）
-agenote_extract(source="claude", date="2026-06-29", output_dir="/tmp/x")  # 指定日期 + 路径
-agenote_trace(fact_id="opencode:ses_x:msg_y")  # 回查 dream 候选的完整原始对话（不截断）
-```
 
-## 跨 agent 工作流（6 个 MCP tool，默认 dry_run）
+## 跨 agent 工作流（5 个子命令）
 
-参考 MiMoCode Memory/Dream/Distill 体系。**纯只读/启发式，不调 LLM**，默认 `dry_run=True` 安全试跑：
+参考 MiMoCode Memory/Dream/Distill 体系。**纯只读/启发式，不调 LLM**。⚠ 与旧 MCP 接口不同：CLI 的 `extract`/`reconcile` **默认真写盘**，首次跑新 source 先加 `--dry-run` 试跑：
 
-```
+```bash
 # 1. 抽取：从各 AI 工具的原始对话 → Org 文件（~/Documents/Org/conversations/<date>/）
-agenote_extract(source="all", dry_run=True)             # 全源 dry-run
-agenote_extract(source="opencode", date="2026-06-29")  # 单源 + 指定日期
-agenote_extract(source="all")                           # 实际写入磁盘
+agenote extract --source all --dry-run               # 全源 dry-run 预览
+agenote extract --source opencode --date 2026-06-29  # 单源 + 指定日期
+agenote extract --source all                         # 实际写入磁盘
 
-# 2. reconcile：把外部 agent memory 索引到 .reconcile/index.json（让 agenote_search 能搜到）
-agenote_reconcile(source="hermes")                      # 单源
-agenote_reconcile(source="all", dry_run=True)           # 全源 dry-run
-agenote_reconcile(source="all")                         # 实际落盘
+# 2. reconcile：把外部 agent memory 索引到 .reconcile/index.json（让 agenote search 能搜到）
+agenote reconcile --source hermes                    # 单源
+agenote reconcile --source all --dry-run             # 全源 dry-run 预览
+agenote reconcile --source all                       # 实际落盘
 
 # 3. dream：从 reconcile 事实启发式提炼候选新卡片（IDF × √df × 形态学评分）
-agenote_dream(window_days=90, limit=5)                  # 默认参数
-agenote_dream(offset=5, limit=5)                        # 多轮抽取，跳过前 5
-agenote_dream(window_days=7)                            # 聚焦近 7 天
-agenote_dream(dry_run=True)                             # 显式 dry-run（默认）
+agenote dream --window-days 90 --limit 5             # 默认参数
+agenote dream --offset 5 --limit 5                   # 多轮抽取，跳过前 5
+agenote dream --window-days 7                        # 聚焦近 7 天
 
 # 4. trace：回查 dream 候选的原始完整对话（溯源，不截断）
-agenote_trace(fact_id="opencode:ses_xxx:msg_yyy")       # 完整对话含 tool/patch
-agenote_trace(fact_id="pi:{uuid}:{msg_id}")             # pi 同样支持
-agenote_trace(fact_id="hermes:23")                      # 未实现则降级返回摘要
+agenote trace --id opencode:ses_xxx:msg_yyy          # 完整对话含 tool/patch
+agenote trace --id pi:{uuid}:{msg_id}                # pi 同样支持
+agenote trace --id hermes:23                         # 未实现则降级返回摘要
 
-# 5. distill：把 KB 中反复使用的模式聚成 skill 草稿（写到 .distill/）
-agenote_distill(dry_run=True)
+# 5. distill：把 KB 中反复使用的模式聚成 skill 草稿（写到 .distill/，不进 skills/）
+#    ⚠ 当前 CLI distill 的 --dry-run 为 default=True 且无法关闭 → 固定只预览不落盘
+agenote distill --window-days 30
 ```
 
 ### dream 评估工作流
 
-```
+```bash
 # 第一轮：取 top 候选
-candidates = agenote_dream(limit=5)
-for c in candidates:
-    print(f"  score={c['score']:.2f}  term={c['term']!r}  freq={c['frequency']}")
-    # 摘要判断：top10 是真项目概念说明算法有效
-    if c['score'] < 30:
-        continue  # 低分候选直接跳过
-    # 深入判断：调 trace 读完整对话
-    full = agenote_trace(fact_id=c['source_trace'])
-    if 'error' in full:
-        continue
-    # 决定：写 KB？touch 已有？跳过？矛盾处理？
-    if 决定写:
-        agenote_add(title=..., body=引用 source_facts 保留溯源)
-    elif 复用已有:
-        agenote_touch(target="<现有卡片ID>")
+agenote dream --limit 5 --json
+# 逐条看 score/term/frequency；score<30 直接跳过
+# 需深入判断：agenote trace --id <source_trace> 读完整对话
+# 决定：
+#   写 KB      → agenote add ...（正文引用 source_facts 保留溯源）
+#   复用已有   → agenote touch <现有卡片ID>
+#   其余       → 跳过 / 矛盾调和
 
 # 第二轮：前 5 个都不满意就跳页
-if 第一轮没产出:
-    candidates = agenote_dream(offset=5, limit=5)
+agenote dream --offset 5 --limit 5
 ```
 
 ### reconcile 行为细节
@@ -358,7 +346,7 @@ if 第一轮没产出:
 
 - **dream**：找 reconcile 事实里高频出现、KB 未覆盖的主题 → 返回候选清单（含代表事实
   正文 + source_trace 溯源指针）。**不再自动写 KB**；综合决策由 agent 主导（见 Step 3）。
-  **零候选即成功**。参数：`window_days`（默认 90）、`offset`（默认 0）、`limit`（默认 5）。
+  **零候选即成功**。参数：`--window-days`（默认 90）、`--offset`（默认 0）、`--limit`（默认 5）。
   评分：IDF × √df × 形态学权重。
 - **trace**：按 `fact_id` 从原始 DB 回查完整对话（不截断），含工具调用/推理/补丁。
   三重只读保护。dream 候选的 `source_trace` 字段就是 `fact_id`。未实现 trace_session 的
@@ -391,7 +379,7 @@ if 第一轮没产出:
 ## 何时不策展
 
 - 单条经验刚写入 → 等 1 周积累 USAGE_COUNT 后再 curate
-- 跨 agent 数据未跑通（schema 漂移）→ 先跑 `agenote_extract(source=<新源>, dry_run=True)` 验证 schema
+- 跨 agent 数据未跑通（schema 漂移）→ 先跑 `agenote extract --source <新源> --dry-run` 验证 schema
 - KB 总卡片 < 30 → curate 收益小，可手动维护
 
 ## 策展完成检查清单

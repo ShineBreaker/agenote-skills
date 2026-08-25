@@ -7,7 +7,7 @@ description: 会话后经验采集与留痕。**触发信号**：agenote-hooks �
 
 会话结束时（或检测到完成信号时），评估是否有可记录的经验，并对用到的资料留痕。
 
-> agenote 已改造为 MCP server，以下 `agenote_*` 均为 MCP tool 名。底层 CLI 为 `agenote`（`~/.local/bin/agenote`），默认操作 agenote 子库（与 MCP server 对齐），`--domain human` 切到人类知识库根。
+> 全部操作通过 `agenote` CLI（`~/.local/bin/agenote`）完成，MCP 接口已移除。默认操作 agenote 子库，`--domain human` 切到人类知识库根。
 
 ## 触发时机
 
@@ -39,16 +39,16 @@ agenote memory
 本次对话是否有可记录的经验信号？
 │
 ├─ 是 → 判断 ENTRY_TYPE
-│   ├─ 用户纠正/走弯路/误判 → agenote_add(entry="mistake", ...)
-│   ├─ 查到的有用知识/方案 → agenote_add(entry="note", ...)
-│   └─ 多轮试错后的最优方案 → agenote_add(entry="ascended", ...)
+│   ├─ 用户纠正/走弯路/误判 → agenote add --entry mistake ...
+│   ├─ 查到的有用知识/方案 → agenote add --entry note ...
+│   └─ 多轮试错后的最优方案 → agenote add --entry ascended ...
 │
 └─ 否 → 还要评估"留痕"
     │
     本轮用到了哪些外部资料？
-    ├─ 来自 agenote/人类KB 的已有卡片 → agenote_touch(target="<ID>")
+    ├─ 来自 agenote/人类KB 的已有卡片 → agenote touch <ID>
     └─ 来自联网的新知识
-        ├─ 已确认有用（实际应用到代码/答案）→ agenote_add(type="note", ...)
+        ├─ 已确认有用（实际应用到代码/答案）→ agenote add --type note ...
         └─ 仅浏览未采用 → 不记录（避免噪音）
 
 如果既无经验信号、又无留痕需求 → 明确回复"本次无可记录经验"
@@ -238,22 +238,21 @@ echo "项目状态" | agenote memory --add --type project --project <id> --title
 当本次会话引用/使用了某张已有卡片（人类的或 agenote 的）：
 
 ```
-agenote_touch(target="<ID>")           # 递增 USAGE_COUNT + 更新 LAST_USED
-# 或读取时顺手留痕：
-agenote_get(target="<ID>", used=true)
+agenote touch <ID>                     # 递增 USAGE_COUNT + 更新 LAST_USED
+# 读取后（agenote get <ID>）顺手补一次 touch 即视为留痕
 ```
 
-> 注意：先用 `agenote_search` 或 `agenote_list` 找到卡片 ID（get/touch 用 ID 匹配，不是 title）。
+> 注意：先用 `agenote search` 或 `agenote list` 找到卡片 ID（get/touch 用 ID 匹配，不是 title）。
 
 ### 对联网新知识留痕（首次获取）
 
 ```
-agenote_add(
-    title="<知识标题>",
-    type="note",
-    entry="note",
-    body="来源: <URL/API>\n核心结论: ...\n适用场景: ..."
-)
+agenote add --title "<知识标题>" --type note --entry note \
+  --summary "来源 + 核心结论一句话" --stdin <<'EOF'
+来源: <URL/API>
+核心结论: ...
+适用场景: ...
+EOF
 ```
 
 ## 避免噪音
@@ -267,8 +266,8 @@ agenote_add(
 
 - **卡片（experiences/）**：记"某次具体事件/知识"——有明确时间点
 - **memory（MEMORY.org）**：记"跨会话偏好/项目元数据"——持续性
-- 用户偏好 → `agenote_memory_add(mem_type="feedback", ...)`
-- 项目约束 → `agenote_memory_add(mem_type="project", project="<名>", ...)`
+- 用户偏好 → `agenote memory --add --type feedback --title "<标题>" --stdin`
+- 项目约束 → `agenote memory --add --type project --project <名> --title "<标题>" --stdin`
 
 ## 详细参考
 

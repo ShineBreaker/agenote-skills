@@ -1,6 +1,6 @@
 ---
 name: agenote-base
-description: 跨 agent 共享知识库（agenote）—— 任务开始时查、过程中复用、结束时记。**触发信号**：开始非平凡任务前 / 遇到已踩过或疑似踩过的坑 / 联网查到新方案 / 用户纠正/纠正自己 / 长任务结束。**当上述任一信号出现时立即调用本 skill**，按其内部规则决策（list→search→get；add→touch；commit）。需要维护 KB 健康度（去重/归档/重整）或从 6+ agent 抽取对话 reconcile 时转 `agenote-curator`；会话结束需评估可记录经验时转 `agenote-review`。底层 CLI 为 `agenote`（`~/.local/bin/agenote`），与 MCP tool 行为对齐。
+description: 跨 agent 共享知识库（agenote）—— 任务开始时查、过程中复用、结束时记。**触发信号**：开始非平凡任务前 / 遇到已踩过或疑似踩过的坑 / 联网查到新方案 / 用户纠正/纠正自己 / 长任务结束。**当上述任一信号出现时立即调用本 skill**，按其内部规则决策（list→search→get；add→touch；commit）。需要维护 KB 健康度（去重/归档/重整）或从 6+ agent 抽取对话 reconcile 时转 `agenote-curator`；会话结束需评估可记录经验时转 `agenote-review`。操作入口只有 CLI `agenote`（`~/.local/bin/agenote`），MCP 接口已移除。
 ---
 
 # agenote — agent 专属记事本
@@ -10,8 +10,8 @@ agenote 是人类知识库（`~/Documents/Org/`）的**并行子集**，专为 A
 > **调用方式**：agenote 通过 `agenote` CLI 操作（`~/.local/bin/agenote`），所有增删查改操作可通过 bash 直接调用。以 `agenote` 开头的子命令（`agenote add`、`agenote search`、`agenote list` 等）即为本 skill 的入口。`--domain human` 切到人类知识库根，不指定时 search 默认做跨域加权检索。
 
 > **来源溯源**：每张 agent 写入的卡片自动打 `:SOURCE_AGENT:` 标签（取自启动 env
-> `AGENOTE_AGENT`，缺失回退 `pi`）。`agenote_health()` 的 `by_source` 字段可看各 agent
-> 写卡分布；`agenote_search` 命中跨 agent 卡片时 `domain`/`source` 字段标注来源。
+> `AGENOTE_AGENT`，缺失回退 `pi`）。`agenote health` 的 `by_source` 字段可看各 agent
+> 写卡分布；`agenote search` 命中跨 agent 卡片时 `domain`/`source` 字段标注来源。
 > 跨 agent 经验共享（reconcile/dream/trace/distill）见 `agenote-curator` skill。
 
 ## 何时该记录
@@ -74,7 +74,7 @@ agenote distill --dry-run                      # 经验→SKILL 草稿
 
 ## `agenote` CLI 底层命令
 
-`agenote` 是 agenote 的底层 CLI（`~/.local/bin/agenote`），MCP tool 所有操作最终调用它。`agenote` 命令可直接在 shell 中使用。
+`agenote` CLI（`~/.local/bin/agenote`，uv tool 安装，Python 包名 `agenote`）是唯一操作入口，所有命令直接在 shell 中使用。
 
 ### 初始化
 
@@ -121,6 +121,8 @@ agenote stats                                                        # 统计概
 agenote reindex                                                      # 重建索引
 agenote lint                                                         # 格式检查
 agenote lint --fix                                                   # 自动修复
+agenote lint --json                                                  # 分类结构化报告（可差分）
+agenote doctor                                                       # 环境自诊断（工具/配置/KB 结构）
 agenote commit -m "一句话总结"                                       # 提交 git
 agenote fields                                                       # 查看所有已有标签
 ```
@@ -144,11 +146,11 @@ agenote health                         # 健康度报告
 
 ## agent 写入者
 
-任何 agent 通过 MCP tool 或 CLI 写入的卡片都自动打 `:SOURCE_AGENT:` 标签（取自 `AGENOTE_AGENT` env）。当前接入的 agent 清单以各自 MCP 配置为准（pi/crush/opencode/hermes），新增 agent 时在其 MCP 配置加 `env: {AGENOTE_AGENT: <name>}` 即可纳入归因。外部 agent（codex/claude/omp 等）经 loopctl 调起时通过其 adapter 的 `env` 块设置。
+任何 agent 经 CLI 写入的卡片都自动打 `:SOURCE_AGENT:` 标签（取自启动 env `AGENOTE_AGENT`，缺失回退 `pi`）。当前接入 pi/crush/opencode/hermes；新增 agent 时在其启动环境设 `AGENOTE_AGENT=<name>` 即可纳入归因。外部 agent（codex/claude/omp 等）经 loopctl 调起时通过其 adapter 的 `env` 块设置。
 
 ## 重要：用 ID 而非 title 定位卡片
 
-`agenote_get`/`agenote_touch`/`agenote_archive` 等 tool 用 **ID 或文件名片段**匹配，不匹配 title。先用 `agenote_list` 或 `agenote_search` 找到卡片 ID（如 `20260625-014305`），再 `agenote_get(target="<ID>")`。
+`agenote get`/`agenote touch`/`agenote archive` 等 subcommand 用 **ID 或文件名片段**匹配，不匹配 title。先用 `agenote list` 或 `agenote search` 找到卡片 ID（如 `20260625-014305`），再 `agenote get <ID>`。
 
 ## ENTRY_TYPE 语义（agent 场景）
 
@@ -162,10 +164,10 @@ agenote health                         # 健康度报告
 
 查询资料后，对**实际用到**的部分留痕：
 
-- **已有卡片**（人类或 agenote）：`agenote_touch(target="<ID>")` 递增 USAGE_COUNT
-- **联网新知识**：`agenote_add(type="note", ...)` 写新卡片留档
+- **已有卡片**（人类或 agenote）：`agenote touch <ID>` 递增 USAGE_COUNT
+- **联网新知识**：`agenote add --entry note ...` 写新卡片留档
 
-频繁使用的卡片在 `agenote_curate` 时权重提升，检索时排名更靠前。
+频繁使用的卡片在 `agenote curate` 时权重提升，检索时排名更靠前。
 
 ## 记忆系统
 
