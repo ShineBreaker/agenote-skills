@@ -1,6 +1,6 @@
 ---
 name: agenote-curator
-description: 跨 agent KB 健康度维护。**触发信号**：每周/长会话后例行维护 / 卡片 >50 张 / 检索质量明显下降 / 用户触发 `/agenote-curate` / 发现重复卡片或矛盾结论 / 新增了对话抽取源。**当上述任一信号出现时立即调用本 skill**——流程由你（agent）主导编排：健康检查、状态重整、去重归档、reconcile 多源 memory 与 dream 综合，CLI 只提供检测报告与原子命令。基础用法见 `agenote-base`；会话中单次经验记录见 `agenote-review`。
+description: 跨 agent KB 健康度维护。**触发信号**：每周/长会话后例行维护 / 卡片 >50 张 / 检索质量明显下降 / 用户触发 `/agenote-curate` / 发现重复卡片或矛盾结论 / 新增了对话抽取源或记忆源。**当上述任一信号出现时立即调用本 skill**——流程由你（agent）主导编排：健康检查、状态重整、去重归档、reconcile 多源 memory、agent 记忆库巡检导入与 dream 综合，CLI 只提供检测报告与原子命令。基础用法见 `agenote-base`；会话中单次经验记录见 `agenote-review`。
 ---
 
 # agenote-curator — 跨 agent 自动策展
@@ -145,7 +145,39 @@ agenote memory --project-touch <name>   # 确认活跃的项目刷新 LAST_ACTIV
 **质量门槛**：score 高 ≠ 值得沉淀。优先综合 `score` 高**且** `representative_content`
 含具体技术细节的候选；纯流程性/工具名词性的候选丢弃。
 
-### Step 8 — 重整与提交
+### Step 8 — agent 记忆库巡检与导入（scan-memories）
+
+各 agent 的持久记忆库是**已提炼的高密度经验**，与 reconcile（读会话对话）互补，本步读记忆文件本体：
+
+```bash
+agenote scan-memories --json          # 全源只读扫描（含记忆全文，供逐条审查）
+agenote scan-memories --source zcode  # 单源扫描
+```
+
+六个源，路径解析一律 env 优先 → config.toml `[memories.sources]` → XDG 占位符 → 默认目录：
+
+| 源      | env                     | 默认根                        | 布局                          |
+| ------ | ----------------------- | ----------------------------- | ----------------------------- |
+| zcode  | `ZCODE_MEMORIES_DIR`    | `~/.zcode/cli/memories`       | projects/\<slug\>/memory/*.md |
+| claude | `CLAUDE_CONFIG_DIR`     | `~/.claude`                   | projects/\<slug\>/memory/*.md |
+| codex  | `CODEX_HOME`            | `~/.codex`                    | memories/**/*.md              |
+| pi     | `PI_CODING_AGENT_DIR`   | `$XDG_CONFIG_HOME/omp`        | agent/memory/**/*.md          |
+| reasonix | `REASONIX_HOME`       | `$XDG_DATA_HOME/reasonix`     | projects/\<slug\>/memory/*.md |
+| hermes | `HERMES_HOME`           | `$XDG_DATA_HOME/hermes`       | memories/*.md（`§` 分节）     |
+
+**逐条评估后显式导入，scan-memories 本身不写 KB**：
+
+1. 读条目 `name` / `description` / `body`，按上方「策展原则」判断沉淀价值
+2. 查重：`agenote search <关键词>`——KB 已覆盖 → `agenote touch <已有ID>` 标记复用，不重复导入
+3. 分流导入（正文保留来源溯源：agent 名 + 原路径 + 原 name）：
+   - 技术经验 / 踩坑 → `agenote add --title <结论式标题> --category <语义映射> --entry note --stdin`
+   - 涉及错误教训的 → `--entry mistake`
+   - agent 工作偏好 / 用户纠正（`type=feedback`）→ `agenote memory --add --type feedback --title ... --stdin`
+4. **不导入**：单项目进度流水账（`type=project` 的状态类）、agent 人格画像（hermes 的 SOUL 类条目）、临时会话状态
+
+**导入上限**：单轮策展导入 ≤10 条，超出触发 Andon（知识库膨胀）暂停待人工决策。
+
+### Step 9 — 重整与提交
 
 ```bash
 agenote reindex        # 重建索引；WEIGHT 随之按 usage/新鲜度公式重算（见「权重机制」）
@@ -176,7 +208,7 @@ commit message 要求：以 `策展:` 前缀开头，50 字以内总结核心操
 
 **阶段拆分规则**：若本轮同时有「遗留未提交改动」和「本次新策展产物」，应**分两个 commit**（先提交遗留，再提交本轮），不混在一起，保持历史可读。
 
-### Step 9 — 输出报告
+### Step 10 — 输出报告
 
 格式见下方「报告格式」。
 
@@ -223,6 +255,7 @@ commit message 要求：以 `策展:` 前缀开头，50 字以内总结核心操
 ═══ 策展报告 ═══
 日期：YYYY-MM-DD
 提取对话：N 条
+巡检 agent 记忆库：N 条（zcode x / claude y / codex z / pi w / reasonix v / hermes u，导入 i 条）
 新增经验卡片：K 张（列出标题）
 更新已有卡片：M 张（列出标题和更新原因）
 晋升为 pattern：P 条（列出标题）
@@ -260,6 +293,8 @@ WEIGHT = 基础权重 × 使用系数 × 新鲜度系数
 
 **三重只读保护**（所有 extractor 共享）：SQLite `mode=ro` + `PRAGMA query_only=1` + 仅 SELECT；JSONL 仅读；文件缺失返回 `([], [msg])` 不抛异常。
 
+**记忆库扫描源**（`agenote scan-memories`，实现于 `agenote/memscan.py`）：读各 agent 持久记忆文件（区别于上述会话源），6 源注册于 `memscan.SOURCES`，根目录解析走 `resolve_xdg_path` 同一套 env > config.toml `[memories.sources]` > XDG > 默认 优先级。目录式源跳过 MEMORY.md 索引；frontmatter 宽容解析；同样纯只读。
+
 ## 手动维护命令（CLI）
 
 ```bash
@@ -271,12 +306,13 @@ agenote archive --list                    # 列出已归档
 agenote restore <ID>                      # 恢复归档卡片
 agenote reindex                           # 重建索引（WEIGHT 一并重算）
 agenote memory --stale                    # 陈旧记忆清单（只读）
+agenote scan-memories                     # 扫描各 agent 记忆库（只读）
 agenote extract --source all --dry-run    # 抽取原始对话为 Org 文件（不落盘）
 agenote extract --source claude --date 2026-06-29   # 指定源 + 日期
 agenote trace --id opencode:ses_x:msg_y   # 回查 dream 候选的完整原始对话（不截断）
 ```
 
-## 跨 agent 工作流（5 个子命令）
+## 跨 agent 工作流（6 个子命令）
 
 参考 MiMoCode Memory/Dream/Distill 体系。**纯只读/启发式，不调 LLM**。⚠ 与旧 MCP 接口不同：CLI 的 `extract`/`reconcile` **默认真写盘**，首次跑新 source 先加 `--dry-run` 试跑：
 
@@ -290,6 +326,10 @@ agenote extract --source all                         # 实际写入磁盘
 agenote reconcile --source hermes                    # 单源
 agenote reconcile --source all --dry-run             # 全源 dry-run 预览
 agenote reconcile --source all                       # 实际落盘
+
+# 2.5 scan-memories：只读扫描各 agent 记忆库（不同于 reconcile 读会话，见 Step 8）
+agenote scan-memories --json                         # 全源（含记忆全文）
+agenote scan-memories --source zcode                 # 单源
 
 # 3. dream：从 reconcile 事实启发式提炼候选新卡片（IDF × √df × 形态学评分）
 agenote dream --window-days 90 --limit 5             # 默认参数
@@ -376,7 +416,7 @@ agenote dream --offset 5 --limit 5
 
 - [ ] `agenote reindex` 已执行
 - [ ] `agenote lint --fix` 无残留错误
-- [ ] **`agenote commit -m "策展: ..."` 已执行（强制，不可省略）**——封装 git add+commit，见「Step 8」
+- [ ] **`agenote commit -m "策展: ..."` 已执行（强制，不可省略）**——封装 git add+commit，见「Step 9」
 - [ ] 新增卡片元数据完整（category/tech/type/owner）
 - [ ] 新增卡片含任务描述、执行过程、关键发现
 - [ ] 代码块使用 Org mode 格式
