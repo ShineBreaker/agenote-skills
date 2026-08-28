@@ -68,22 +68,19 @@
 
 ### 第〇步：提取对话（夜间策展必做）
 
-使用 `agenote extract`（MCP tool：`agenote_extract`）从所有 AI 编程工具提取昨日对话，输出到 `~/Documents/Org/conversations/<date>/`：
+使用 `agenote extract` 从所有 AI 编程工具提取昨日对话，输出到 `~/Documents/Org/conversations/<date>/`：
 
 ```bash
-# MCP tool（agent 主循环用）
-agenote_extract(source="all", date="2026-07-08", output_dir="~/Documents/Org/conversations/2026-07-08")
-# CLI 等价（底层走 ag_lib/extract/ 多源抽取器）
 agenote extract --source all --date 2026-07-08 --output-dir ~/Documents/Org/conversations/2026-07-08
 ```
 
 抽取器自动覆盖 7 个数据源（opencode/crush/codex/claude/pi/hermes/zcode），
 输出 Org-mode 格式对话文件。提取完成后浏览输出目录，标记有记录价值的对话文件。
 
-### 第一步：诊断（agenote_health 或 agenote curate）
+### 第一步：诊断（agenote health）
 
-运行 `agenote health`（MCP：`agenote_health()`），获取知识库整体健康报告。
-一键流水用 `agenote_curate()`（执行 Step 1 KB 内策展 + Step 2 reconcile 机械两步）。
+运行 `agenote health --quality --duplicates`，获取知识库整体健康报告与质量/重复扫描。
+策展流程由 agent 依据本指南逐步编排原子命令，无一键命令。
 
 关注指标：
 
@@ -96,13 +93,16 @@ agenote extract --source all --date 2026-07-08 --output-dir ~/Documents/Org/conv
 
 #### 步骤 1.5：状态转换
 
-诊断后执行状态转换：
+诊断后由 agent 审查候选并显式执行状态转换（CLI 只提供只读候选发现）：
 
 ```bash
-agenote stats                  # 检查状态分布
+agenote stats                                # 检查状态分布
+agenote list --unused-days 30 --all          # 降级候选（超 30 天未用）
+# 逐张 agenote get 核实后：agenote update <id> --status stale
 # done >30天且质量合格 → agenote update <id> --status stable
 # stable >30天未 LAST_VERIFIED → agenote touch <id>
-# stale >90天 → agenote archive <id> --reason "策展: >90天未验证"
+agenote archive --stale                      # 归档候选清单（只读：stale 且 >90 天未验证）
+# 审查后批量执行：agenote archive <id...> --reason "策展: >90天未验证"
 ```
 
 ### 第二步：筛选（agenote gaps）
@@ -223,9 +223,10 @@ agenote search "<相关关键词>"
 #### 步骤 6.5：记忆验证与项目更新
 
 ```bash
-agenote memory --stale                    # 逐条验证
-agenote memory --stale --auto-archive-days 60  # 自动归档 >60天 stale feedback
-agenote memory --project-touch <name>     # 更新活跃项目 LAST_ACTIVE
+agenote memory --stale                    # 列出 >30 天未更新的记忆（只读）
+# 审查后逐条归档：agenote memory --archive-to-file <F###>
+agenote memory --project <name>           # 检索项目记忆（含 PATH/UPDATED 健康提示，只读）
+agenote memory --project-touch <name>     # 确认仍活跃的项目更新 LAST_ACTIVE
 ```
 
 ### 第七步：重整

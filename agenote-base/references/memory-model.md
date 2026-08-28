@@ -51,5 +51,5 @@ echo "该项目用 Guix 构建，blue rebuild 部署" | \
 ```bash
 agenote memory --touch F001              # 更新时间戳
 agenote memory --archive F001            # 归档到 deprecated
-agenote memory --stale --auto-archive-days 60  # 自动归档陈旧 feedback
+agenote memory --stale                   # 列出陈旧记忆（只读；归档逐条 --archive/--archive-to-file）
 ```

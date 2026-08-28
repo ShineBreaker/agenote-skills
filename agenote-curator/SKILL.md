@@ -1,6 +1,6 @@
 ---
 name: agenote-curator
-description: 跨 agent KB 健康度维护。**触发信号**：每周/长会话后例行维护 / 卡片 >50 张 / 检索质量明显下降 / 用户触发 `/agenote-curate` / 发现重复卡片或矛盾结论 / 新增了对话抽取源。**当上述任一信号出现时立即调用本 skill** 做健康检查+去重+归档+权重重分配+reconcile 多源 memory。基础用法见 `agenote-base`；会话中单次经验记录见 `agenote-review`。
+description: 跨 agent KB 健康度维护。**触发信号**：每周/长会话后例行维护 / 卡片 >50 张 / 检索质量明显下降 / 用户触发 `/agenote-curate` / 发现重复卡片或矛盾结论 / 新增了对话抽取源。**当上述任一信号出现时立即调用本 skill**——流程由你（agent）主导编排：健康检查、状态重整、去重归档、reconcile 多源 memory 与 dream 综合，CLI 只提供检测报告与原子命令。基础用法见 `agenote-base`；会话中单次经验记录见 `agenote-review`。
 ---
 
 # agenote-curator — 跨 agent 自动策展
@@ -17,24 +17,42 @@ description: 跨 agent KB 健康度维护。**触发信号**：每周/长会话�
 - 新增了对话源或更新了 XDG 环境变量
 - 用户主动要求 `/agenote-curate`
 
-## 一键策展
+## 策展流程（agent 主导）
+
+**分工原则**：CLI 只提供检测报告（`health` / `gaps` / `deduplicate` / `list --unused-days` / `archive --stale`）与原子写命令（`update` / `archive` / `merge` / `touch` / `connect`）；**流程编排与去留决策由你执行**。所有状态转换前先看候选清单、核实内容，再显式落地——CLI 已无一键策展命令。
+
+### Step 0 — 提取对话（可选）
 
 ```bash
-agenote curate          # 机械阶段：Step 1 + Step 2（KB 内策展 + reconcile）
-# Step 3（Agent 综合）由你在 curate 后手动驱动，见下文
+# 底层走 agenote/extract/ 多源抽取器；输出固定到 conversations/<date>/（--output-dir 可覆盖）
+agenote extract --source all --date $(date -d yesterday +%Y-%m-%d)
 ```
 
-`agenote curate` 执行**机械阶段 2 步**（无 LLM）；Step 3 是可选的 **agent 综合阶段**，读 dream 候选后用 `agenote add` 写新卡片：
+### Step 1 — 诊断
 
-### Step 1 — KB 内策展（5 步）
+```bash
+agenote health --quality --duplicates   # 健康度 + 质量扫描 + 重复检测
+agenote stats                           # 状态分布
+agenote gaps --stale-days 60            # 类别×类型矩阵 + 缺失组合 + 陈旧卡片
+```
 
-1. **健康检查**：孤立率、过时率、类型偏斜、薄弱类别
-2. **权重重分配**：根据 USAGE_COUNT 和新鲜度重新计算每张卡片的 WEIGHT
-3. **去重检测**：标题相似度 + category/tech 匹配
-4. **归档陈旧**：超阈值（90 天）未验证的 stale 卡片自动归档
-5. **重建索引**：全量扫描 experiences/ 刷新 index.json
+指标解读见下方「健康度指标解读」。
 
-### Step 1.5 — type 聚拢（agent 判断）
+### Step 2 — 状态重整（agent 审查后显式执行）
+
+```bash
+agenote list --unused-days 30 --all     # 降级候选（>30 天未使用，只读）
+agenote get <id>                        # 抽查候选内容，判断是否真过时
+agenote update <id> --status stale      # 确认过时 → 降级
+agenote update <id> --status stable     # done >30 天且质量合格 → 转 stable
+agenote touch <id>                      # 仍有效 → 刷新 LAST_VERIFIED
+agenote archive --stale                 # 归档候选清单（stale 且 >90 天未验证，只读）
+agenote archive <id...> --reason "策展: >90天未验证"   # 审查后批量归档
+```
+
+**逐项判断，不要看天数就批量降级**——LAST_USED 超期只说明没人用，语义是否过时要读卡判断。
+
+### Step 3 — type 聚拢（agent 判断）
 
 type 收敛需要语义理解，CLI 只设门禁（add/update 新 type 需 `--force`），聚拢决策由你执行：
 
@@ -49,11 +67,32 @@ type 收敛需要语义理解，CLI 只设门禁（add/update 新 type 需 `--fo
    已有 type 都不重合且预期会持续增长（如 mistake/ascended 虽少但语义独特，
    也可考虑并入 debug——以内容审查为准）
 
-### Step 2 — 跨 agent reconcile
+### Step 4 — 去重与合并
 
-按 `agenote/extract/__init__.py` 的 `_resolve_extractors()` 注册顺序跑全部 source，结果写到 `.reconcile/index.json`。**写入层自动过滤元消息噪声**（TodoWrite / system-reminder / checkpoint 等源自 harness 注入而非用户经验的内容，判据见 `agenote.core.is_noise_fact`）。
+```bash
+agenote deduplicate                    # 检测重复对（标题相似度 + category/tech 加权，只读）
+agenote get <id_a> && agenote get <id_b>   # 核实是否真重复
+agenote merge <primary> <secondary> --desc "合并原因"   # secondary 自动归档
+```
 
-### Step 3 — Agent 综合（从 reconcile 事实提炼新 KB 卡片）
+### Step 5 — 矛盾调和与传播联动
+
+见下方「矛盾调和规则」「传播联动规则」。
+
+### Step 6 — memory 维护
+
+```bash
+agenote memory --stale                  # 列出 >30 天未更新记忆（只读）
+agenote memory --archive-to-file <F###> # 审查后逐条归档 feedback 到 MEMORY-ARCHIVE.org
+agenote memory --project <name>         # 项目记忆检索 + PATH/UPDATED 健康提示（只读）
+agenote memory --project-touch <name>   # 确认活跃的项目刷新 LAST_ACTIVE
+```
+
+### Step 7 — 跨 agent reconcile + dream 综合
+
+**reconcile**：按 `agenote/extract/__init__.py` 的 `_resolve_extractors()` 注册顺序跑全部 source，结果写到 `.reconcile/index.json`（**写入层自动过滤元消息噪声**——TodoWrite / system-reminder / checkpoint 等源自 harness 注入而非用户经验的内容，判据见 `agenote.core.is_noise_fact`）。首次跑新 source 先 `--dry-run` 试跑。
+
+**dream 综合**（Agent 综合阶段，从 reconcile 事实提炼新 KB 卡片）：
 
 `agenote dream` 返回 ≤`limit` 个候选（默认 5，可调）。每个候选含：
 
@@ -89,8 +128,6 @@ type 收敛需要语义理解，CLI 只设门禁（add/update 新 type 需 `--fo
   **注意 offset 不稳定**：候选排序随 reconcile 索引更新漂移，`report.snapshot_hash`
   标识本次候选集指纹——两次调用指纹不同即说明排序已变，同一 offset 可能指向不同候选
 - `limit`：本次最多返回 N 个候选（默认 5）
-- `--dry-run`：**已废弃，无效果**——dream 是纯只读候选发现器，绝不自动写 KB。
-  综合写入由你主导（见上方 Step 3）。该 flag 保留仅为向后兼容
 - 无 timestamp 的 fact（hermes 30 条）**默认保留**，不受窗口影响
 
 **评分算法（IDF × √df × 形态学，TF 作 tie-breaker）**：
@@ -108,76 +145,12 @@ type 收敛需要语义理解，CLI 只设门禁（add/update 新 type 需 `--fo
 **质量门槛**：score 高 ≠ 值得沉淀。优先综合 `score` 高**且** `representative_content`
 含具体技术细节的候选；纯流程性/工具名词性的候选丢弃。
 
-## Batch 策展流水线（`kb` CLI）
-
-按顺序执行以下 10 步，适用于夜间策展或手动批处理：
-
-### 第 0 步：提取对话
+### Step 8 — 重整与提交
 
 ```bash
-# 底层走 agenote/extract/ 多源抽取器；输出固定到 conversations/<date>/（--output-dir 可覆盖）
-agenote extract --source all --date $(date -d yesterday +%Y-%m-%d)
-
-
-### 第 1 步：诊断
-
-```bash
-agenote health --quality --duplicates   # 健康度 + 质量扫描 + 重复检测（统一自 ag_lib/health.py）
-agenote stats                           # 状态分布
+agenote reindex        # 重建索引；WEIGHT 随之按 usage/新鲜度公式重算（见「权重机制」）
+agenote lint --fix     # 格式自动修复（语义问题报告，人工判断）
 ```
-
-### 第 2 步：状态转换
-
-```bash
-# done >30 天且质量合格 → stable
-agenote update <id> --status stable
-# stale >90 天 → 归档
-agenote archive <id> --reason "策展: >90 天未验证"
-```
-
-### 第 3 步：空白检测
-
-```bash
-agenote gaps --stale-days 60            # 类别×类型矩阵 + 缺失组合 + 陈旧卡片（迁自 find_gaps.py）
-```
-
-### 第 4 步：矛盾调和
-
-见下方"矛盾调和规则"。
-
-### 第 5 步：自发综合 + 卡片合并
-
-```bash
-agenote deduplicate --threshold 0.7
-agenote merge <primary> <secondary> --desc "合并原因"
-```
-
-### 第 6 步：补充
-
-从对话历史/收件箱提取经验：
-
-```bash
-agenote fields        # 查看标签，优先复用
-agenote add ...       # 写入新卡片
-```
-
-### 第 7 步：传播联动
-
-见下方"传播联动规则"。
-
-```bash
-agenote memory --stale                    # 记忆验证
-agenote memory --stale --auto-archive-days 60  # 自动归档
-```
-
-### 第 8 步：重整
-
-```bash
-agenote reindex
-agenote lint --fix
-```
-
-### 第 9 步：提交变更
 
 > **commit 是不可省略的收尾步骤**。用 `agenote commit` 封装 git add+commit。
 > 历史教训：2026-07-07 之前多轮策展因 skill 写了不存在的 `agenote commit` 而从未真正提交，积累大量未跟踪/已修改文件。该子命令现已实现（D1 修复，2026-07-07），**默认精准 add 策展产物**（experiences/index.json/conversations/kb-viz.html），不会误吞无关文件（如其他仓库的同步改动）。
@@ -203,9 +176,9 @@ commit message 要求：以 `策展:` 前缀开头，50 字以内总结核心操
 
 **阶段拆分规则**：若本轮同时有「遗留未提交改动」和「本次新策展产物」，应**分两个 commit**（先提交遗留，再提交本轮），不混在一起，保持历史可读。
 
-### 第 10 步：输出报告
+### Step 9 — 输出报告
 
-格式见下方"报告格式"。
+格式见下方「报告格式」。
 
 ## 策展原则
 
@@ -266,10 +239,10 @@ deprecated: X 条
 
 检索时 `agenote search` 跨域扫描人类（weight 默认 1.5）+ agent（weight 默认 1.0）+ reconcile（weight 0.6-0.7）卡片，最终分数 = 原始相关度 × WEIGHT。
 
-**curate 时的权重重分配公式**：
+**WEIGHT 是派生值**：索引层（`_card_dict`）按以下公式计算，`reindex` / `touch` 等任何索引重建路径自动重算，卡片文件中的 WEIGHT 属性已废弃（新卡不再写入）：
 
 ```
-新 WEIGHT = 基础权重 × 使用系数 × 新鲜度系数
+WEIGHT = 基础权重 × 使用系数 × 新鲜度系数
 
 基础权重:   人类=1.5, agent=1.0, reconcile=0.6-0.7
 使用系数:   1 + 0.1 × min(USAGE_COUNT, 10)   # 常用的提升，上限 +1.0
@@ -292,11 +265,12 @@ deprecated: X 条
 ```bash
 agenote health                            # KB 健康度
 agenote deduplicate                       # 只检测重复
-agenote archive --stale                   # 只归档陈旧
+agenote list --unused-days 30 --all       # 降级候选（只读）
+agenote archive --stale                   # 归档候选清单（只读）
 agenote archive --list                    # 列出已归档
 agenote restore <ID>                      # 恢复归档卡片
-agenote reindex                           # 只重建索引
-agenote memory --stale                    # 陈旧记忆
+agenote reindex                           # 重建索引（WEIGHT 一并重算）
+agenote memory --stale                    # 陈旧记忆清单（只读）
 agenote extract --source all --dry-run    # 抽取原始对话为 Org 文件（不落盘）
 agenote extract --source claude --date 2026-06-29   # 指定源 + 日期
 agenote trace --id opencode:ses_x:msg_y   # 回查 dream 候选的完整原始对话（不截断）
@@ -327,9 +301,8 @@ agenote trace --id opencode:ses_xxx:msg_yyy          # 完整对话含 tool/patc
 agenote trace --id pi:{uuid}:{msg_id}                # pi 同样支持
 agenote trace --id hermes:23                         # 未实现则降级返回摘要
 
-# 5. distill：把 KB 中反复使用的模式聚成 skill 草稿（写到 .distill/，不进 skills/）
-#    ⚠ 当前 CLI distill 的 --dry-run 为 default=True 且无法关闭 → 固定只预览不落盘
-agenote distill --window-days 30
+# 5. distill：把 KB 中反复使用的模式聚成候选工作流清单（纯只读；skill 草稿由 agent 撰写）
+agenote distill
 ```
 
 ### dream 评估工作流
@@ -360,13 +333,15 @@ agenote dream --offset 5 --limit 5
 ### dream / distill / trace 行为
 
 - **dream**：找 reconcile 事实里高频出现、KB 未覆盖的主题 → 返回候选清单（含代表事实
-  正文 + source_trace 溯源指针）。**不再自动写 KB**；综合决策由 agent 主导（见 Step 3）。
+  正文 + source_trace 溯源指针）。**绝不自动写 KB**；综合决策由 agent 主导（见 Step 7）。
   **零候选即成功**。参数：`--window-days`（默认 90）、`--offset`（默认 0）、`--limit`（默认 5）。
   评分：IDF × √df × 形态学权重。
 - **trace**：按 `fact_id` 从原始 DB 回查完整对话（不截断），含工具调用/推理/补丁。
   三重只读保护。dream 候选的 `source_trace` 字段就是 `fact_id`。未实现 trace_session 的
   source（hermes/crush/codex/claude）降级返回索引层摘要。
-- **distill**：把 KB 里 `type=ascended`/`usage_count≥2` 的卡片按 category+tech 聚类 → SKILL.md 草稿（写 `.distill/`，**不进 skills/**，人工 move 才生效）。**零候选即成功**。
+- **distill**：把 KB 里 `type=ascended`/`usage_count≥2` 的卡片按 category+tech 聚类 →
+  候选工作流清单（含源卡片 id，纯只读不落盘）。**零候选即成功**；值得沉淀的候选由
+  agent 评估源卡片后自行撰写 SKILL.md。
 
 ## 健康度指标解读
 
@@ -401,7 +376,7 @@ agenote dream --offset 5 --limit 5
 
 - [ ] `agenote reindex` 已执行
 - [ ] `agenote lint --fix` 无残留错误
-- [ ] **`agenote commit -m "策展: ..."` 已执行（强制，不可省略）**——封装 git add+commit，见「第 9 步」
+- [ ] **`agenote commit -m "策展: ..."` 已执行（强制，不可省略）**——封装 git add+commit，见「Step 8」
 - [ ] 新增卡片元数据完整（category/tech/type/owner）
 - [ ] 新增卡片含任务描述、执行过程、关键发现
 - [ ] 代码块使用 Org mode 格式
@@ -409,4 +384,4 @@ agenote dream --offset 5 --limit 5
 
 ## 详细参考
 
-- [策展工作流与质量标准](references/curation-guide.md) — 完整批处理步骤、矛盾调和、Andon 机制、报告格式
+- [策展工作流与质量标准](references/curation-guide.md) — 完整流程细节、矛盾调和、Andon 机制、报告格式

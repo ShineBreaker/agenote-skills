@@ -60,16 +60,16 @@ agenote memory --add --type feedback --title "偏好" --stdin
 agenote memory                                 # 概览
 agenote memory --stale                         # 陈旧记忆
 
-# 策展（健康+去重+归档+权重重分配）
-agenote curate
+# 策展（流程见 agenote-curator skill，由 agent 编排原子命令，无一键命令）
+agenote health --quality --duplicates        # 诊断入口
 agenote commit -m "策展: 更新说明"             # 提交知识库变更
 
-# 跨 agent 协同（reconcile/extract/dream/trace/distill/curate）
+# 跨 agent 协同（reconcile/extract/dream/trace/distill）
 agenote reconcile --source all                 # 抽取→索引（只读）
 agenote extract --source opencode --date 2026-07-09  # 抽原始对话为 Org
 agenote dream --window-days 90 --limit 5       # 启发式候选（IDF × √df × 形态学 + TF tie-breaker，只读不写 KB）
 agenote trace --id "<source_trace>"            # 回查 dream 候选的完整原始对话（不截断）
-agenote distill --dry-run                      # 经验→SKILL 草稿
+agenote distill                                # 候选工作流清单（纯只读）
 ```
 
 ## `agenote` CLI 底层命令
@@ -171,7 +171,7 @@ agenote health                         # 健康度报告
 - **已有卡片**（人类或 agenote）：`agenote touch <ID>` 递增 USAGE_COUNT
 - **联网新知识**：`agenote add --entry note ...` 写新卡片留档
 
-频繁使用的卡片在 `agenote curate` 时权重提升，检索时排名更靠前。
+频繁使用的卡片 WEIGHT 自动提升（usage_count 参与权重公式，reindex 时重算），检索时排名更靠前。
 
 ## 记忆系统
 
@@ -198,12 +198,11 @@ echo "blue rebuild 部署" | agenote memory --add --type project --title "构建
 # 检索
 agenote memory                            # 概览
 agenote memory --type feedback            # 只看 feedback
-agenote memory --project .                # 当前项目记忆（任务开始时执行）
+agenote memory --project .                # 当前项目记忆（任务开始时执行，含健康提示）
 agenote memory --get                      # 全文
-agenote memory --stale                    # 陈旧记忆
+agenote memory --stale                    # 陈旧记忆清单（只读）
 agenote memory --touch F001               # 更新时间戳
 agenote memory --archive F001             # 归档到 deprecated
-agenote memory --stale --auto-archive-days 60  # 自动归档陈旧 feedback
 ```
 
 ## 详细参考
