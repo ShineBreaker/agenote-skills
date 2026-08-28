@@ -34,6 +34,21 @@ agenote curate          # 机械阶段：Step 1 + Step 2（KB 内策展 + reconc
 4. **归档陈旧**：超阈值（90 天）未验证的 stale 卡片自动归档
 5. **重建索引**：全量扫描 experiences/ 刷新 index.json
 
+### Step 1.5 — type 聚拢（agent 判断）
+
+type 收敛需要语义理解，CLI 只设门禁（add/update 新 type 需 `--force`），聚拢决策由你执行：
+
+1. `agenote fields --type` 查看各 type 计数；对可疑 type 用
+   `agenote list --type <t> --all` 核实**非归档**卡片数
+2. **非归档卡片数 <10 的 type 列为聚拢候选**（≥10 说明该 type 是真实需求，如
+   `note` 之于 `workflow`——一个是查到的知识，一个是做法总结，保留不动作）
+3. 候选 type 逐张审查（`agenote get <id>`），语义可归入已有大 type 的：
+   `agenote update <id> --type <目标type>`（自动同步属性/标签/文件名/索引，
+   目标 type 必须已存在，否则需 `--force`）
+4. 全部卡片归走后该 type 自然消亡；**确需保留** = 候选内卡片有独立语义、与所有
+   已有 type 都不重合且预期会持续增长（如 mistake/ascended 虽少但语义独特，
+   也可考虑并入 debug——以内容审查为准）
+
 ### Step 2 — 跨 agent reconcile
 
 按 `agenote/extract/__init__.py` 的 `_resolve_extractors()` 注册顺序跑全部 source，结果写到 `.reconcile/index.json`。**写入层自动过滤元消息噪声**（TodoWrite / system-reminder / checkpoint 等源自 harness 注入而非用户经验的内容，判据见 `agenote.core.is_noise_fact`）。

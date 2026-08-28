@@ -110,6 +110,10 @@ agenote add --title "标题" --category <类别> --tech <技术栈> \
 EOF
 ```
 
+**type 门禁**：`--type` 只用标准值（debug/refactor/research/workflow/feature/config）
+或知识库已有值（`agenote fields --type` 查看）；新 type 会被 CLI 拒绝，确有新语义
+类别才加 `--force` 强制写入。
+
 ### 管理
 
 ```
