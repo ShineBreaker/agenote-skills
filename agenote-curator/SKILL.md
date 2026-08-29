@@ -75,6 +75,23 @@ agenote get <id_a> && agenote get <id_b>   # 核实是否真重复
 agenote merge <primary> <secondary> --desc "合并原因"   # secondary 自动归档
 ```
 
+### Step 4.5 — KB→skill 晋升（WikiSkill 管道，agent 判断）
+
+审查 mistake/ascended 卡片时，挑出**同一主题证据 ≥3 次**的候选晋升为 skill（对应
+`correction-funnel` Step 5.5；那边的触发端每次会话生效，本步是策展时的批量执行端）：
+
+1. **先读审计簿** `~/.local/share/hermes/skills/skill-impact.md`——候选方向如有被拒记录
+   （Rejected 条目），提案必须回应拒绝原因，不得原样重提
+2. 每轮策展最多晋升 **1 个** skill（原子提案，防批量改动无法归因）；候选多于 1 个时
+   挑 Evidence 最厚的
+3. skill 本体按 `skill-authoring` §9 分类树放置（`<category>/<skill-name>/`，保证
+   skills_list 可发现、skill_view 可加载）；SKILL.md frontmatter 后加
+   `来源: agenote <卡片ID>` 反向链接
+4. 用户过目拍板 → 落地 → 登记审计簿（Accepted/Rejected 一行，格式见簿头）
+5. 源卡片 `--status done` + 正文补 `→ 已晋升为 skill <名字> (日期)`
+
+零候选（无卡片达 3 次门槛）即跳过本步，属正常。
+
 ### Step 5 — 矛盾调和与传播联动
 
 见下方「矛盾调和规则」「传播联动规则」。
@@ -234,6 +251,7 @@ commit message 要求：以 `策展:` 前缀开头，50 字以内总结核心操
 
 - 新卡片推翻旧结论 → `agenote update` 在旧卡追加勘误
 - 同类卡片 ≥3 张 → 晋升为 pattern
+- pattern 证据 ≥3 次且跨任务可执行 → 走 Step 4.5 晋升为 skill
 - 新卡片补充了已有 pattern → 修补 pattern
 - 隐含关联的卡片 → `agenote connect` 建立双向链接
 - pattern 引用的卡片已过时 → 标注 pattern 并引用新卡片
