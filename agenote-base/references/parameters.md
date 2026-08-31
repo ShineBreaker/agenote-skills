@@ -1,8 +1,6 @@
 # 参数取值
 
-<critical> 
-`category` 和 `tech` 均**不设白名单**，允许自由输入。Agent 在写入前应先用 `agenote fields --category` 或 `agenote fields --tech` 查看已有标签，优先复用；只有遇到全新领域时才创建新类别。
-</critical>
+`category` 和 `tech` 均**不设白名单**，允许自由输入——但写入前先用 `agenote fields --category` / `agenote fields --tech` 查看已有标签，优先复用，只有全新领域才创建新类别。原因：标签是检索的聚合维度，同义异写的标签（如 `guix` / `Guix System`）会把同一主题的卡片打散成多个桶，彼此检索不到。
 
 ## --category（类别，自由输入，优先复用已有标签）
 
@@ -56,25 +54,25 @@
 
 ## PROPERTIES 新增字段
 
-| 字段             | 说明                                  |
-| ---------------- | ------------------------------------- |
+| 字段             | 说明                                    |
+| ---------------- | --------------------------------------- |
 | `LAST_USED`      | 最后一次通过 agenote get/touch 访问时间 |
-| `LAST_VERIFIED`  | 最后策展验证时间                      |
-| `MERGED_INTO`    | 合并目标卡片 ID（被合并的卡片）       |
-| `MERGED_FROM`    | 合并来源卡片 ID 列表（主卡片）        |
-| `ARCHIVED_AT`    | 归档时间                              |
-| `ARCHIVE_REASON` | 归档原因                              |
+| `LAST_VERIFIED`  | 最后策展验证时间                        |
+| `MERGED_INTO`    | 合并目标卡片 ID（被合并的卡片）         |
+| `MERGED_FROM`    | 合并来源卡片 ID 列表（主卡片）          |
+| `ARCHIVED_AT`    | 归档时间                                |
+| `ARCHIVE_REASON` | 归档原因                                |
 
 ## 新命令概览
 
-| 命令                 | 用法                                     | 说明                         |
-| -------------------- | ---------------------------------------- | ---------------------------- |
-| `agenote touch`      | `agenote touch <id> [--used-only]`       | 更新时间戳                   |
-| `agenote merge`      | `agenote merge <primary> <sec>...`       | 合并卡片                     |
-| `agenote archive`    | `agenote archive <id...> [--reason]`     | 归档（批量）                 |
-| `agenote archive`    | `agenote archive --stale`                | 列出归档候选（只读）         |
-| `agenote restore`    | `agenote restore <id> [--status stable]` | 恢复                         |
-| `agenote deduplicate`| `agenote deduplicate [--threshold 0.7]`  | 检测重复                     |
-| `agenote review`     | `agenote review <id>`                    | 审查卡片（只读）             |
-| `agenote health`     | `agenote health [--quality] [--duplicates]` | 健康度报告               |
-| `agenote list`       | `agenote list --unused-days N`           | 降级候选（只读）             |
+| 命令                  | 用法                                        | 说明                 |
+| --------------------- | ------------------------------------------- | -------------------- |
+| `agenote touch`       | `agenote touch <id> [--used-only]`          | 更新时间戳           |
+| `agenote merge`       | `agenote merge <primary> <sec>...`          | 合并卡片             |
+| `agenote archive`     | `agenote archive <id...> [--reason]`        | 归档（批量）         |
+| `agenote archive`     | `agenote archive --stale`                   | 列出归档候选（只读） |
+| `agenote restore`     | `agenote restore <id> [--status stable]`    | 恢复                 |
+| `agenote deduplicate` | `agenote deduplicate [--threshold 0.7]`     | 检测重复             |
+| `agenote review`      | `agenote review <id>`                       | 审查卡片（只读）     |
+| `agenote health`      | `agenote health [--quality] [--duplicates]` | 健康度报告           |
+| `agenote list`        | `agenote list --unused-days N`              | 降级候选（只读）     |

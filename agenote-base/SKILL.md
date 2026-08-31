@@ -1,106 +1,59 @@
 ---
 name: agenote-base
-description: 跨 agent 共享知识库（agenote）—— 任务开始时查、过程中复用、结束时记。**触发信号**：开始非平凡任务前 / 遇到已踩过或疑似踩过的坑 / 联网查到新方案 / 用户纠正/纠正自己 / 长任务结束。**当上述任一信号出现时立即调用本 skill**，按其内部规则决策（list→search→get；add→touch；commit）。需要维护 KB 健康度（去重/归档/重整）或从 6+ agent 抽取对话 reconcile 时转 `agenote-curator`；会话结束需评估可记录经验时转 `agenote-review`。操作入口只有 CLI `agenote`（`~/.local/bin/agenote`），MCP 接口已移除。
+description: 跨 agent 共享知识库（agenote）：任务开始查经验、过程中复用、结束记录。触发：非平凡任务开工前 / 疑似踩过同坑 / 联网查到新方案 / 被用户纠正 / 长任务收尾——任一出现即调用，按内部规则 list→search→get、add→touch。KB 健康度维护与多 agent 对话 reconcile 转 agenote-curator；会话结束经验评估转 agenote-review。
 ---
 
 # agenote — agent 专属记事本
 
 agenote 是人类知识库（`~/Documents/Org/`）的**并行子集**，专为 AI agent 记录而设。数据隔离在 `~/Documents/Org/agenote/` 子目录，与人类卡片互不污染。
 
-> **调用方式**：agenote 通过 `agenote` CLI 操作（`~/.local/bin/agenote`），所有增删查改操作可通过 bash 直接调用。以 `agenote` 开头的子命令（`agenote add`、`agenote search`、`agenote list` 等）即为本 skill 的入口。`--domain human` 切到人类知识库根，不指定时 search 默认做跨域加权检索。
+> **调用方式**：所有操作通过 CLI `agenote`（`~/.local/bin/agenote`，bash 直接调用），无 MCP 接口。以 `agenote` 开头的子命令（`add`、`search`、`list` 等）即为本 skill 的入口。`--domain human` 切到人类知识库根，不指定时 search 默认做跨域加权检索。
 
-> **来源溯源**：每张 agent 写入的卡片自动打 `:SOURCE_AGENT:` 标签（取自启动 env
-> `AGENOTE_AGENT`，缺失回退 `pi`）。`agenote health` 的 `by_source` 字段可看各 agent
-> 写卡分布；`agenote search` 命中跨 agent 卡片时 `domain`/`source` 字段标注来源。
-> 跨 agent 经验共享（reconcile/dream/trace/distill）见 `agenote-curator` skill。
+> **来源溯源**：agent 写入的卡片自动打 `:SOURCE_AGENT:` 标签（取自启动 env `AGENOTE_AGENT`，缺失回退 `pi`）。当前接入 pi/crush/opencode/hermes/zcode；新增 agent 在其启动环境设 `AGENOTE_AGENT=<name>` 即可纳入归因，`agenote health` 的 `by_source` 字段可看各 agent 写卡分布。外部 agent（codex/claude/omp 等）经 loopctl 调起时，通过其 adapter 的 `env` 块设置。
 
-## 何时该记录
+## 任务前预检
 
-主动记录以下场景，减少重复劳动：
-
-- **查询到的有用知识**：联网/文档查到的技术方案、API 用法、环境信息（写 `--type note`）
-- **项目处理中的问题**：调试踩坑、被用户纠正、走了弯路（写 `--entry mistake`）
-- **多轮试错的最优方案**：经历多次失败后找到的正确做法（写 `--entry ascended`）
-- **跨会话偏好**：用户对 agent 工作方式的偏好（写 `memory --type feedback`）
-- **项目特定约束**：某仓库的技术栈、构建命令、已知坑点（写 `memory --project`）
-
-## 何时不该记录（避免噪音）
-
-- 纯浏览未采用的资料（只记录实际用到的）
-- 临时调试输出、可从代码直接推导的信息
-- 一次性任务、不具复用价值的细节
-
-## 核心命令（CLI）
+开始非平凡任务（调试/排障、配置修改、用过的技术栈、与之前类似的问题）前，先查已有经验——KB 的价值靠复用兑现，检索一次的成本远低于重新踩坑：
 
 ```
-# 初始化（仅首次）
-agenote init
-
-# 添加卡片（note/mistake/ascended）
-agenote add --title "标题" --entry note --stdin <<EOF
-详细内容
-EOF
-
-# 读取卡片（用 ID，不是 title；先 list/search 找 ID）
-agenote get <ID>                              # 读取
-agenote touch <ID>                            # 留痕（USAGE_COUNT+1）
-
-# 跨域加权检索（同时搜人类 + agent 卡片，人类权重更高）
-agenote search "关键词"                        # 默认跨域
-agenote search "关键词" --json                 # JSON 输出（含 domain/score 字段）
-agenote --domain human search "关键词"         # 仅搜人类域
-
-# 列出/统计/健康度
-agenote list --category 类别 --all             # 按领域列出
-agenote stats                                  # 统计
-agenote health                                 # 健康度
-
-# 记忆系统
-agenote memory --add --type feedback --title "偏好" --stdin
-agenote memory                                 # 概览
-agenote memory --stale                         # 陈旧记忆
-
-# 策展（流程见 agenote-curator skill，由 agent 编排原子命令，无一键命令）
-agenote health --quality --duplicates        # 诊断入口
-agenote commit -m "策展: 更新说明"             # 提交知识库变更
-
-# 跨 agent 协同（reconcile/extract/dream/trace/distill）
-agenote reconcile --source all                 # 抽取→索引（只读）
-agenote extract --source opencode --date 2026-07-09  # 抽原始对话为 Org
-agenote dream --window-days 90 --limit 5       # 启发式候选（IDF × √df × 形态学 + TF tie-breaker，只读不写 KB）
-agenote trace --id "<source_trace>"            # 回查 dream 候选的完整原始对话（不截断）
-agenote distill                                # 候选工作流清单（纯只读）
+agenote list --category <相关类别> --all   # 先看领域标题索引
+agenote get <明显相关的卡片ID>
+agenote search "<技术 工具 症状>"           # 标题不足以定位时正文检索
+agenote memory --project .                 # 当前项目记忆
 ```
 
-## `agenote` CLI 底层命令
+全新领域开发、简单编辑、有明确文档的标准操作可跳过。结果处理：高相关 → 作为上下文；低相关/空 → 静默继续；矛盾 → 以较新/经验证的为准。
 
-`agenote` CLI（`~/.local/bin/agenote`，uv tool 安装，Python 包名 `agenote`）是唯一操作入口，所有命令直接在 shell 中使用。
+## 何时记录（场景 → 写法）
 
-### 初始化
+| 场景                                    | 写法                           |
+| --------------------------------------- | ------------------------------ |
+| 联网/文档查到并实际用到的方案、API 用法 | `add --entry note`             |
+| 调试踩坑、被用户纠正、误判需求、走弯路  | `add --entry mistake`          |
+| 多轮试错后找到的正确做法                | `add --entry ascended`         |
+| 用户对 agent 工作方式的偏好（跨会话）   | `memory --add --type feedback` |
+| 项目技术栈、构建命令、已知坑点          | `memory --add --type project`  |
 
-```
-agenote init            # 创建目录结构 + git 仓库 + 初始 commit
-agenote init --no-git   # 仅创建目录结构，跳过 git
-```
+不记录：纯浏览未采用的资料、临时调试输出、可从代码直接推导的信息、一次性任务细节——噪音会稀释检索质量。
+
+## CLI 速查
 
 ### 检索
 
 ```
-agenote list --category <类别> --all          # 按领域列出所有标题和元数据
-agenote search "<关键词 工具 症状>" [--context N] [--limit N]
-agenote search "<关键词 工具 症状>" --all-terms
+agenote list --category <类别> --all     # 按领域列出标题+元数据（检索首选）
+agenote get <ID>                         # 读卡片（用 ID，不是 title）
+agenote search "<关键词>" [--json]       # 跨域加权检索（人类域权重更高）
+agenote search "<关键词>" --all-terms    # 要求全部词项命中（AND 语义）
+agenote search "<关键词>" --context N --limit N
 agenote search --regex "<正则>"
-agenote get <卡片ID或文件名>
 ```
-
-检索优先用 `agenote list --category <类别> --all` 获取该领域全部卡片标题和元数据，再根据标题对相关卡片执行 `agenote get <id>`。仅标题列表不足以定位时，再用 `agenote search` 做正文检索。
 
 ### 写入
 
 ```
 agenote add --title "标题" --category <类别> --tech <技术栈> \
-  --type <类型> --owner <执行者> \
-  [--entry mistake|note|ascended] --summary "总结" --stdin <<EOF
+  --type <类型> --entry <note|mistake|ascended> --summary "一句话总结" --stdin <<EOF
 ** 任务描述
 ...
 ** 执行过程
@@ -110,106 +63,66 @@ agenote add --title "标题" --category <类别> --tech <技术栈> \
 EOF
 ```
 
-**type 门禁**：`--type` 只用标准值（debug/refactor/research/workflow/feature/config）
-或知识库已有值（`agenote fields --type` 查看）；新 type 会被 CLI 拒绝，确有新语义
-类别才加 `--force` 强制写入。
+**type 门禁**：`--type` 只用正式 type（`agenote fields --type` 查看；种子 6 类 debug/refactor/research/workflow/feature/config 免检，其余需非归档 ≥10 张才晋升正式）；非正式 type 会被 CLI 拒绝，确需延续/新建才加 `--force`（新 type 持续写到 10 张后自动转正免检）。
 
 ### 管理
 
 ```
-agenote update <ID> --status done                                   # 更新状态
-agenote update <ID> --append-to "关键发现" --append-text "新发现"   # 追加内容
-agenote connect <卡片A> <卡片B> --desc "描述"                       # 双向链接
-agenote inbox "待捕获的想法"                                         # 快速捕获
-agenote stats                                                        # 统计概览
-agenote reindex                                                      # 重建索引
-agenote lint                                                         # 格式检查
-agenote lint --fix                                                   # 自动修复
-agenote lint --json                                                  # 分类结构化报告（可差分）
-agenote doctor                                                       # 环境自诊断（工具/配置/KB 结构）
-agenote commit -m "一句话总结"                                       # 提交 git
-agenote fields                                                       # 查看所有已有标签
+agenote init [--no-git]                  # 仅首次：创建目录结构 + git 仓库（--no-git 跳过 git）
+agenote touch <ID>                        # 留痕（USAGE_COUNT+1）
+agenote update <ID> --status done|stable|stale
+agenote update <ID> --append-to "关键发现" --append-text "新发现"
+agenote connect <A> <B> --desc "描述"     # 双向链接
+agenote merge <primary> <sec>             # 合并卡片（secondary 自动归档）
+agenote archive <ID> / agenote restore <ID>
+agenote archive --list                    # 列出已归档（restore 前先在此找 ID）
+agenote inbox "待捕获的想法"
+agenote stats / agenote health / agenote fields
+agenote lint [--fix] / agenote lint --json   # 后者输出分类结构化报告（可差分）
+agenote reindex / agenote doctor
+agenote commit -m "一句话总结"            # 提交 KB git 变更
 ```
 
-### 卡片生命周期
+完整参数取值见 [references/parameters.md](references/parameters.md)。
+
+## 用 ID 而非 title 定位卡片
+
+`get`/`touch`/`archive`/`update` 用 **ID 或文件名片段**匹配，不匹配 title。先用 `list` 或 `search` 找到卡片 ID（形如 `20260625-014305`）再操作。
+
+## 留痕机制
+
+查询资料后，对**实际用到**的部分留痕：已有卡片 `agenote touch <ID>` 递增 USAGE_COUNT；联网新知识 `add --entry note` 写卡留档，`--summary` 写"来源 + 核心结论一句话"，正文首行留 `来源: <URL/API>` 保留可回溯性。频繁使用的卡片 WEIGHT 自动提升（usage_count 参与权重公式，reindex 时重算），检索排名更靠前——留痕是提升下次命中率的手段，不是仪式。
+
+## 记忆系统
+
+四种类型：feedback（行为偏好）/ project（按项目拆分，存 `memories/projects/<项目>.org`）/ reference（可跨项目复用的参考）/ deprecated（陈旧归档）。
 
 ```
-agenote touch <id>              # 标记"刚用过"
-agenote update <id> --status stable    # 策展验证后设为 stable
-agenote archive <id>                   # 归档
-agenote restore <id>                   # 恢复
-agenote review <id>                    # 审查质量
-agenote deduplicate                    # 检测重复
-agenote merge <primary> <sec>...       # 合并卡片
-agenote health                         # 健康度报告
+echo "正文" | agenote memory --add --type feedback --title "标题" --stdin
+echo "正文" | agenote memory --add --type project --project <项目> --title "标题" --stdin
+agenote memory                            # 概览
+agenote memory --project .                # 当前项目记忆（含健康提示）
+agenote memory --get                      # 全文
+agenote memory --stale                    # 陈旧清单（只读）
+agenote memory --touch F001 / agenote memory --archive F001
 ```
+
+F/R 序号由 CLI 自动分配（feedback 记 F 序号入 MEMORY.org `* feedback` 节，reference 记 R 序号，project 追加到 `memories/projects/<name>.org`），无需手工管理。模型细节见 [references/memory-model.md](references/memory-model.md)。
 
 ## 可视化
 
 `agenote viz -o out.html` 把 KB 渲染成可搜索的单文件 HTML（自带主题）；`--serve --port 8765` 起本地服务。用户说"用 md2html"或"把 KB 渲染出来看"时，先想 `agenote viz`。内容是单份 markdown 报告（非 KB 卡片）时退回 `pandoc -s <md> -o <html>`。
 
-## agent 写入者
+## 相关 skill
 
-任何 agent 经 CLI 写入的卡片都自动打 `:SOURCE_AGENT:` 标签（取自启动 env `AGENOTE_AGENT`，缺失回退 `pi`）。当前接入 pi/crush/opencode/hermes；新增 agent 时在其启动环境设 `AGENOTE_AGENT=<name>` 即可纳入归因。外部 agent（codex/claude/omp 等）经 loopctl 调起时通过其 adapter 的 `env` 块设置。
-
-## 重要：用 ID 而非 title 定位卡片
-
-`agenote get`/`agenote touch`/`agenote archive` 等 subcommand 用 **ID 或文件名片段**匹配，不匹配 title。先用 `agenote list` 或 `agenote search` 找到卡片 ID（如 `20260625-014305`），再 `agenote get <ID>`。
-
-## ENTRY_TYPE 语义（agent 场景）
-
-| ENTRY_TYPE | 何时使用                                   |
-| ---------- | ------------------------------------------ |
-| `note`     | agent 查询到的有用知识、参考方案、环境信息 |
-| `mistake`  | agent 被用户纠正、走了弯路、误判需求       |
-| `ascended` | agent 经历多次失败/重试后找到的正确做法    |
-
-## 留痕机制（减少重复联网）
-
-查询资料后，对**实际用到**的部分留痕：
-
-- **已有卡片**（人类或 agenote）：`agenote touch <ID>` 递增 USAGE_COUNT
-- **联网新知识**：`agenote add --entry note ...` 写新卡片留档
-
-频繁使用的卡片 WEIGHT 自动提升（usage_count 参与权重公式，reindex 时重算），检索时排名更靠前。
-
-## 记忆系统
-
-agenote 的 memory 子系统记录跨会话的偏好与项目元数据。
-
-### 四种记忆类型
-
-| 类型       | 用途     | agenote 场景                                      |
-| ---------- | -------- | ------------------------------------------------- |
-| feedback   | 行为偏好 | 用户对 agent 工作方式的偏好（回复风格、工具选择） |
-| project    | 项目记忆 | 按项目拆分，存 `memories/projects/<项目>.org`     |
-| reference  | 参考资料 | 可跨项目复用的参考                                |
-| deprecated | 归档     | 陈旧记忆归档区                                    |
-
-### CLI 操作
-
-```
-# feedback 记忆
-echo "用户偏好简洁回复" | agenote memory --add --type feedback --title "回复偏好" --stdin
-
-# project 记忆（按项目拆分）
-echo "blue rebuild 部署" | agenote memory --add --type project --title "构建方式" --project Guix-configs --stdin
-
-# 检索
-agenote memory                            # 概览
-agenote memory --type feedback            # 只看 feedback
-agenote memory --project .                # 当前项目记忆（任务开始时执行，含健康提示）
-agenote memory --get                      # 全文
-agenote memory --stale                    # 陈旧记忆清单（只读）
-agenote memory --touch F001               # 更新时间戳
-agenote memory --archive F001             # 归档到 deprecated
-```
+- KB 例行策展（健康度维护、去重归档、reconcile、dream 综合）→ `agenote-curator`
+- 会话结束经验评估与留痕决策 → `agenote-review`
 
 ## 详细参考
 
 - [卡片格式与字段](references/card-format.md)
 - [记忆系统模型](references/memory-model.md)
 - [ENTRY_TYPE 语义映射](references/entry-types.md)
-- [参数取值表](references/parameters.md) — `--category`/`--tech`/`--type`/`--owner`/`--entry`/`--status` 等取值
-- [Org 格式规范](references/markdown-to-org.md) — 代码块/强调/标题等 Org vs Markdown 对照
+- [参数取值表](references/parameters.md) — `--category`/`--tech`/`--type`/`--owner`/`--entry`/`--status` 等
+- [Org 格式规范](references/markdown-to-org.md) — 代码块/强调/标题 Org vs Markdown 对照
 - [体验卡片模板](references/experience-template.org) — 完整 Org 模板（Emacs org-capture 用）

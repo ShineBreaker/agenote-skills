@@ -38,6 +38,7 @@ echo "内容" | agenote memory --add --type feedback --title "偏好描述"
 ## 自动模式
 
 在策展（agenote-curator skill 主导）中：
+
 - `agenote health --quality --duplicates` 检查知识库状况与重复
 - `agenote review <id>` 审查单卡质量（只读，修复用 update 显式执行）
 - 状态转换由 agent 审查候选后显式执行（done → stable → stale → archived）
