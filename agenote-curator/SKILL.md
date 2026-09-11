@@ -65,6 +65,22 @@ type 的正式性是动态的：**正式 type = 种子 6 类 ∪ 非归档卡片
 3. 候选 type 逐张审查（`agenote get <id>`），语义可归入已有大 type 的：`agenote update <id> --type <目标type>`（自动同步属性/标签/文件名/索引；目标 type 须为正式 type，否则需 `--force`）
 4. 全部卡片归走后该 type 自动失去正式性（门禁随即拦截它）；**确需保留** = 候选内卡片有独立语义、预期会持续增长到晋升阈值以上（延续写入需逐张 `--force` 直到满 10 张自动转正——以内容审查为准）
 
+### Step 3.5 — tech 聚拢（agent 判断，动态）
+
+TECH 是比 type 更自由、更容易碎片化的标签：历史上会混入大小写变体、`,`/`;`/空格三种分隔符、子库/函数/症状级超具体词，以及 `debugging`/`methodology` 这类非技术栈噪音。与 type 不同，tech **不设门禁、不设固定白名单**——每轮聚拢口径都按当前 KB 的实际分布现算，随技术栈演进增删。
+
+1. `agenote fields --tech`（必要时 `--json` 便于差分）看当前分布
+2. 识别碎片信号：
+   - **格式变体**：同义异写（`Guix`/`guix`）、分隔符混用（逗号/分号/空格）
+   - **上下位错位**：子库、函数、症状被当成独立技术栈（`elisp`/`ratatui`/`shepherd` 应分别归入 `emacs`/`rust`/`guix`）
+   - **非技术栈噪音**：流程/方法论/状态词（`debugging`、`methodology`、`verification`、`batch验证`）
+   - **单例长尾**：只出现一次、无复用价值的超具体标签
+3. 聚拢口径 = **宽口径「技术域」**：一张卡挂 **1 个主域**；具体版本、库名、函数、症状留在正文，不进 TECH
+4. 逐张 `agenote get <id>` 判主域 → `agenote update <id> --tech "<主域>"`（属性/标签/索引一并同步）
+5. **域集合是观察结果，不是白名单**：出现一整类新栈就新增一个域；某域长期萎缩到 1-2 张可并入相邻域——判断依据始终是当前分布，而非任何固定清单
+
+> 参考快照（2026-09 一次全量收敛后，**非白名单**）：`guix` `emacs` `agent` `linux` `common-lisp` `rust` `virtualization` `typescript` `git` `godot` `python` `network`。下次策展重新按实际分布评估，不要照抄。
+
 ### Step 4 — 去重与合并
 
 ```bash
@@ -232,6 +248,7 @@ commit message 以 `策展:` 前缀开头，50 字以内总结核心操作。无
 巡检 agent 记忆库：N 条（zcode x / claude y / codex z / pi w / reasonix v / hermes u，导入 i 条）
 新增经验卡片：K 张（列出标题）
 更新已有卡片：M 张（列出标题和更新原因）
+TECH 聚拢：X 张（旧值 → 主域）
 晋升为 pattern：P 条（列出标题）
 修补 pattern：Q 条
 矛盾调和：C 个（列出涉及的卡片）
@@ -262,6 +279,7 @@ deprecated: X 条
 
 - [ ] `agenote reindex` 已执行
 - [ ] `agenote lint --fix` 无残留错误
+- [ ] `agenote fields --tech` 无格式变体/非技术栈噪音/单例长尾（Step 3.5）
 - [ ] `agenote commit -m "策展: ..."` 已执行（封装 git add+commit，见 Step 9）
 - [ ] 新增卡片元数据完整（category/tech/type/owner）
 - [ ] 新增卡片含任务描述、执行过程、关键发现

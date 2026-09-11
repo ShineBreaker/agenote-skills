@@ -6,11 +6,15 @@
 
 请直接通过 `agenote fields --category` 来获取已有的内容
 
-## --tech（技术栈，自由输入，优先复用已有标签）
+## --tech（技术栈域，自由输入，优先复用已有标签）
 
-请直接通过 `agenote fields --tech` 来获取已有的内容
+`agenote fields --tech` 查看当前取值。写入时**复用已有一级技术域**，不要新造同义/上下位标签：
 
-同上，优先复用已有 tech 标签，无匹配时再创建。
+- **一卡一主域**：只写最主要的技术域（如 `guix` / `emacs` / `rust`）；具体版本、子库、函数、症状写进正文，不进 TECH
+- **分隔符只用逗号**（聚拢后通常只有一个值）。不要用 `;` 或空格——它们会破坏索引的标签展开
+- **大小写统一小写**（写 `guix` 而非 `Guix`）
+
+技术域集合**不设白名单、动态演进**，由 `agenote-curator` Step 3.5 在每轮策展按实际分布聚拢。当前快照（仅供参考，非白名单）：`guix` / `emacs` / `agent` / `linux` / `common-lisp` / `rust` / `virtualization` / `typescript` / `git` / `godot` / `python` / `network`。
 
 ## --type（类型）
 
