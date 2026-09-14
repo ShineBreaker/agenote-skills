@@ -290,3 +290,4 @@ deprecated: X 条
 
 - [策展参考手册](references/curation-guide.md) — 卡片质量标准、dream/reconcile/权重机制细节、数据源注册
 - [健康度评估范式](references/health-assessment.md) — 指标解读、红灯组合信号、体检报告骨架
+- [多日跨平台回顾](references/multi-day-review.md) — 「总结最近 N 天所有平台对话」的端到端流程（抽取循环 → 压缩 → 分片外派 → 落卡 → 挂链 → 提交）与已知坑
