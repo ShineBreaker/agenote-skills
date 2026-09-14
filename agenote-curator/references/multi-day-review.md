@@ -3,6 +3,9 @@
 适用：用户要求「总结最近 N 天**所有平台**的对话」时的端到端流程。单会话内的经验采集走 `agenote-review`；
 本文件只管「跨天 × 跨平台」的批量回顾。首次成形于 2026-09-14 的 14 天回顾（zcode/omp/crush/opencode/codex/claude + hermes 会话，3.5MB 原始语料）。
 
+> 通用模式（不限 agenote、适用于任意大语料分片提炼：切片纪律 / 只读 worker 任务书要素 / 幂等落库）见 skill `corpus-harvest-fanout`
+> （`~/.local/share/hermes/skills/autonomous-ai-agents/corpus-harvest-fanout/`）。本文件是它在 agenote KB 上的具体化。
+
 ## 步骤
 
 **0. 定窗口。** 默认最近 14 天，逐日算出 `YYYY-MM-DD` 列表。
