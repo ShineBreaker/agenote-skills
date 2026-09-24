@@ -2,19 +2,24 @@
 
 agenote 的 memory 子系统记录跨会话的偏好与项目元数据，存储在 `~/Documents/Org/agenote/MEMORY.org` 和 `memories/projects/`。
 
-## 四个标准节
+## 六节 + 五类型（N1 类型化模型）
 
-| 节         | 用途     | agenote 场景                                        |
-| ---------- | -------- | --------------------------------------------------- |
-| feedback   | 行为偏好 | 用户对 agent 工作方式的偏好（如回复风格、工具选择） |
-| project    | 项目记忆 | 按项目拆分，存 `memories/projects/<项目>.org`       |
-| reference  | 参考资料 | 可跨项目复用的参考（常用 API、工具用法）            |
-| deprecated | 归档     | 陈旧记忆归档区                                      |
+| 节          | 前缀 | 用途     | scope            | 典型内容                                   |
+| ----------- | ---- | -------- | ---------------- | ------------------------------------------ |
+| user        | U    | 用户癖好 | user（跨项目）   | 回复用中文、删除一律 trash-put             |
+| feedback    | F    | 行为纠正 | user / project   | 被纠正后的做法（如读文件用 Read 而非 cat） |
+| project     | P    | 项目取向 | project          | 该仓库提交前跑测试（混合节：项目索引行 + P 序号条目） |
+| environment | E    | 环境局限 | machine / user   | Guix 禁持久安装、无 sudo                   |
+| reference   | R    | 参考资料 | 任意             | 可跨项目复用的指针（构建产物路径等）       |
+| deprecated  | —    | 归档     | —                | 终态；supersede 的旧条目落此处             |
+
+条目可选属性：`:TYPE: :SCOPE: :ORIGIN_AGENT: :ORIGIN_ID: :VALIDATED_AT: :EXPIRES_AFTER: :SUPERSEDES:`；无 `:TYPE:` 的存量条目按前缀/节推导。
 
 ## 检索方式
 
 ```bash
 agenote memory                          # 全部概览
+agenote memory --list [--type U|F|P|E|R] [--scope S] [--json]  # 只读列出条目（含钩子与时效）
 agenote memory --type feedback          # 只看 feedback
 agenote memory --project <名称|路径|.>   # 按项目检索
 agenote memory --get                    # 全文
