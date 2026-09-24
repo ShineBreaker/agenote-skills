@@ -16,10 +16,11 @@ agenote 是人类知识库（`~/Documents/Org/`）的**并行子集**，专为 A
 开始非平凡任务（调试/排障、配置修改、用过的技术栈、与之前类似的问题）前，先查已有经验——KB 的价值靠复用兑现，检索一次的成本远低于重新踩坑：
 
 ```
-agenote list --category <相关类别> --all   # 先看领域标题索引
+agenote list --category <相关类别> --all   # ①查经验：领域标题索引
 agenote get <明显相关的卡片ID>
 agenote search "<技术 工具 症状>"           # 标题不足以定位时正文检索
-agenote memory --project .                 # 当前项目记忆
+agenote memory --list --json               # ②查画像：用户偏好/项目约定/环境事实（--type U|F|P|E|R --scope 过滤）
+agenote memory --project .                 # 当前项目记忆（含健康提示）
 ```
 
 全新领域开发、简单编辑、有明确文档的标准操作可跳过。结果处理：高相关 → 作为上下文；低相关/空 → 静默继续；矛盾 → 以较新/经验证的为准。
@@ -35,6 +36,8 @@ agenote memory --project .                 # 当前项目记忆
 | 项目技术栈、构建命令、已知坑点          | `memory --add --type project`  |
 
 不记录：纯浏览未采用的资料、临时调试输出、可从代码直接推导的信息、一次性任务细节——噪音会稀释检索质量。
+
+**写入门禁（T1）**：可从项目现状直接推导的内容、git 历史既成事实、临时状态（构建产物路径、当前分支/进程状态等）——**即使被显式要求也拒收**，只转述其中非显然、跨会话仍成立的部分。U/F 边界判据：被纠正过的行为记 F（feedback），用户直接陈述的偏好记 U（user_preference）；边界样本有纠正史按 F、无则按 U。
 
 ## CLI 速查
 
@@ -70,6 +73,8 @@ EOF
 ```
 agenote init [--no-git]                  # 仅首次：创建目录结构 + git 仓库（--no-git 跳过 git）
 agenote touch <ID>                        # 留痕（USAGE_COUNT+1）
+agenote touch <ID> --session <SID>          # 同卡同会话只计一次 USAGE（防重复刷分）
+agenote sweep [--apply] [--json]            # done→stale 降级候选（默认只读清单）
 agenote update <ID> --status done|stable|stale
 agenote update <ID> --append-to "关键发现" --append-text "新发现"
 agenote connect <A> <B> --desc "描述"     # 双向链接
@@ -108,6 +113,15 @@ agenote memory --touch F001 / agenote memory --archive F001
 ```
 
 F/R 序号由 CLI 自动分配（feedback 记 F 序号入 MEMORY.org `* feedback` 节，reference 记 R 序号，project 追加到 `memories/projects/<name>.org`），无需手工管理。模型细节见 [references/memory-model.md](references/memory-model.md)。
+
+### 记忆 SSOT 速查（N1 已落地；摄取/投影/重验系规划中）
+
+```
+agenote memory --list [--type U|F|P|E|R] [--scope S] [--json]  # 只读列出事实条目
+agenote dream --window-days 90 --limit 5     # 候选新卡片（只读；游标自动推进，唯一落盘是 dream-cursor.json）
+```
+
+`memory import` / `export` / `--conflicts` / `--supersede` / `--validate` / `--revalidate` ——规划中，未落地，编排见 `agenote-curator`。
 
 ## 可视化
 

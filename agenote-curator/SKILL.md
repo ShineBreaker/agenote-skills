@@ -169,6 +169,27 @@ agenote scan-memories --source zcode  # 单源扫描
 
 **导入上限**：单轮策展导入 ≤10 条，超出触发 Andon（知识库膨胀）暂停待人工决策。
 
+### Step 8.5 — 记忆 SSOT 管道：摄取 / 投影 / 冲突裁决 / 重验
+
+状态：`reconcile --prune-orphans` 已落地；`memory import/export/--conflicts/--supersede/--validate/--revalidate` **规划中**（设计见 agenote 仓 `AGENOTE_MEMORY_SYSTEM_DESIGN.md` §N2–N5；下述命令形态以 CLI 落地后的 `--help` 为准）。
+
+**已落地（本轮即可用）**：
+
+```bash
+agenote reconcile --source all --dry-run        # 先预览 orphan 标记
+agenote reconcile --source all --prune-orphans  # 确认源文件确实消失、事实已失效后显式清理
+```
+
+孤儿 ≠ 删除事件：源消失可能是宿主重整格式——先复核事实是否仍成立，成立则保留（走重验），失效才清理。
+
+**规划中（CLI 落地后按此编排）**：
+
+- **import（摄取）**：新增记忆源 / 宿主记忆有实质更新后跑；先 `--dry-run` 看 imported / skipped / suspected_dup / conflicted / secret_blocked 五类清单，逐条复核再落盘。回声防护：export 目标路径下的文件自动跳过。
+- **export（投影）**：v1 仅 zcode/claude 聚合投影 + codex 建议清单；pi/reasonix/hermes 不做（待 Q4 黑盒验证）。跑前先看漂移报告：宿主改过聚合文件 → 不覆盖，走 import 重新裁决。
+- **冲突队列**：`memory --conflicts` 只读列出；裁决优先级 human > 高 trust agent > 低 trust，同级比 VALIDATED_AT；落定用 `--supersede <new> <old>`（新条写 SUPERSEDES + 刷 VALIDATED_AT，旧条进 deprecated 记 SUPERSEDED_BY），不用裸 add/update 组合以免漏步骤。
+- **重验队列**：`memory --revalidate` 只读列出（machine-key 变更批量标记 + 手填过期 + 孤儿）；核实通过 `--validate <id>` 续期，不通过则 supersede/归档。E 类默认无时间过期——失效是事件（换机器/升系统）不是时间流逝。
+- 纪律：语义裁决一律 agent/人逐条确认，CLI 只出结构化候选，不做静默合并；批量上限沿用 Step 8 的 Andon 口径。
+
 ### Step 9 — 重整与提交
 
 ```bash
