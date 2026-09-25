@@ -13,15 +13,21 @@ agenote 的 memory 子系统记录跨会话的偏好与项目元数据，存储�
 | reference   | R    | 参考资料 | 任意             | 可跨项目复用的指针（构建产物路径等）       |
 | deprecated  | —    | 归档     | —                | 终态；supersede 的旧条目落此处             |
 
-条目可选属性：`:TYPE: :SCOPE: :ORIGIN_AGENT: :ORIGIN_ID: :VALIDATED_AT: :EXPIRES_AFTER: :SUPERSEDES:`；无 `:TYPE:` 的存量条目按前缀/节推导。
+条目可选属性：`:TYPE: :SCOPE: :PROJECT: :SENSITIVITY: :MACHINE: :ORIGIN_AGENT: :ORIGIN_ID: :ORIGIN_PATH: :VALIDATED_AT: :EXPIRES_AFTER: :USAGE_COUNT: :SUPERSEDES: :SUPERSEDED_BY: :ARCHIVED_AT: :NEEDS_REVIEW:`；无 `:TYPE:` 的存量条目按前缀/节推导。
+
+关键语义：
+
+- `:PROJECT:` 是**分区键**而非类型限定——任意类型（U/F/R 等）带此属性即只在对应项目上下文注入/投影；外部记忆 import 时自动落源侧 `projects/<slug>` 原值（zcode `-<16hex>` 尾缀、claude 消毒路径 slug 由匹配侧判定，不改写）。
+- `:SENSITIVITY:` 非空即受限：条目留在 SSOT 可本地读取，但**不进** `context` 注入与 `memory --export` 投影。
+- `:USAGE_COUNT:` 由 `--touch` 递增，与 `:UPDATED:` 内容时效分离；`--archive`/`--supersede` 落 `:ARCHIVED_AT:`/`SUPERSEDED_BY:` 墓碑后可追溯。
 
 ## 检索方式
 
 ```bash
 agenote memory                          # 全部概览
-agenote memory --list [--type U|F|P|E|R] [--scope S] [--json]  # 只读列出条目（含钩子与时效）
+agenote memory --list [--type U|F|P|E|R] [--scope S] [--json]  # 只读列出条目（含钩子与时效；敏感条目带 sensitive 标记）
 agenote memory --type feedback          # 只看 feedback
-agenote memory --project <名称|路径|.>   # 按项目检索
+agenote memory --project <名称|路径|.>   # 按项目检索（源 slug 也可命中）
 agenote memory --get                    # 全文
 agenote memory --get --type project     # 只看 project 节
 agenote memory --stale                  # 陈旧记忆（超 30 天未更新）
@@ -38,6 +44,11 @@ echo "用户偏好简洁回复，不要长篇解释" | \
 echo "该项目用 Guix 构建，blue rebuild 部署" | \
   agenote memory --add --type project --title "构建方式" \
   --project Guix-configs --stdin
+
+# 限定项目的偏好（任意类型可带 --project 分区）与不外发的敏感条目
+agenote memory --add --type feedback --title "内部代号" --sensitivity private --stdin
+
+# 写入侧 secret 门禁默认开启：命中高置信密钥前缀即拒写；确认非密钥加 --allow-secret
 ```
 
 ## feedback 条目格式

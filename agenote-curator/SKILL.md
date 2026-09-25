@@ -214,6 +214,7 @@ agenote context --mode session --host zcode --budget 4000  # 抽样：看该宿�
 
 - **宿主自带记忆检测**（zcode / claude / codex / omp / hermes 五项，只读探测；宿主未安装则跳过不计分）：目标态 = agenote 注入接管、宿主自带记忆关闭。某宿主报自带记忆仍开启 → 按 doctor 附带的指引改**该宿主自身**的配置（agenote 不代改宿主配置），下轮策展复查是否已关。
 - **双通道并存警告**（`[memories.targets]` 任一非空 且 `[injection] enabled=true`）：同一份记忆将经投影与注入双份进上下文。按退役指引处理：清空 targets 配置让注入成为唯一通道（projector 代码保留，配置层面 deprecated）；下轮复查 doctor 不再告警。
+- **kb-secrets 警告**：SSOT 高流量面（MEMORY.org / 卡片 / inbox）混入密钥形态内容的事后审计——写侧门禁只拦新增，存量靠此项兜底发现。命中即逐条人工裁决清理（只报类别与文件名，不回显值）。
 - **context 简报抽样**：对启用了注入器的宿主各抽一次 `--mode session`，与 `memory --list` 比对——发现陈旧/该重验的条目转 Step 8.5 重验队列（`--revalidate` → `--validate` / `--supersede`）；确认末尾「如何查更多」指引仍可执行。json 输出三态 `status: ok|empty|disabled`（正常 / KB 无匹配 / 开关关闭）用于排障；简报按预算裁剪（先裁 R → F → P → E → U）属正常行为，不算缺陷。
 
 ### Step 9 — 重整与提交

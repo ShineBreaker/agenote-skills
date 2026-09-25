@@ -107,6 +107,8 @@ agenote commit -m "一句话总结"            # 提交 KB git 变更
 ```
 echo "正文" | agenote memory --add --type feedback --title "标题" --stdin
 echo "正文" | agenote memory --add --type project --project <项目> --title "标题" --stdin
+# --project 是分区键（任意类型可用）；--sensitivity private 标"不注入不投影"；
+# 写入默认过 secret 门禁，命中密钥前缀即拒写（确非密钥加 --allow-secret）
 agenote memory                            # 概览
 agenote memory --project .                # 当前项目记忆（含健康提示）
 agenote memory --get                      # 全文
