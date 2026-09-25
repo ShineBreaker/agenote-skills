@@ -25,6 +25,8 @@ agenote memory --project .                 # 当前项目记忆（含健康提�
 
 全新领域开发、简单编辑、有明确文档的标准操作可跳过。结果处理：高相关 → 作为上下文；低相关/空 → 静默继续；矛盾 → 以较新/经验证的为准。
 
+**注入简报在场时降级**：注入器开启的宿主中，会话可能已带 `agenote context` 记忆简报（首行 marker `<!-- agenote-context v1 ... -->` 可识别）。marker 在场**且**简报覆盖当前任务域（U/E/P/F/R 条目命中本任务涉及的项目、环境或主题）时，预检从「必跑」降为「补查」——简报已覆盖的维度不再重查，未覆盖的照常查。注意简报只含记忆条目的一行式精选，不含经验卡片，卡片检索（list/search/get）按任务需要照常跑。简报末尾固定的「更多：`agenote memory --list --type X` / `agenote search <kw>`」指引照常有效，需要条目全文时按指引展开。marker 缺席或覆盖不足 → 照常完整预检。
+
 ## 何时记录（场景 → 写法）
 
 | 场景                                    | 写法                           |
@@ -128,6 +130,18 @@ agenote dream --window-days 90 --limit 5     # 候选新卡片（只读；游标
 ```
 
 日常单条增改仍走 `memory --add` / `--touch` / `--archive`；import/export/冲突裁决/重验属策展编排，流程见 `agenote-curator` Step 8.5。
+
+## 注入器与开关
+
+注入器开启的宿主（zcode/claude/codex/pi/opencode/hermes）会在会话中由插件/hook 自动调 `agenote context` 注入记忆简报——agenote 本身仍是纯粹 CLI，不做常驻进程。与用户既有的 context-select 决策核（`~/.config/agents/context-select.sh`）两层并列：决策核注入**原则层**（怎么做事的稳定规范），agenote 注入**事实层**（动态更新、会裁决的记忆/画像）——不融合、不互斥、不重复。
+
+注入行为不对或想启停时，**优先改 agenote 配置，再考虑物理移除注入器**（配置可逆、一处生效）：
+
+1. `~/.config/agenote/config.toml` 的 `[injection]` 节：`enabled = false` 一键全关；预算/召回参数（`default_budget` / `recall_topk` / `recall_min_score` 等）也在此节
+2. `[injection.hosts]` 平铺键 `<host>_enabled = false`（zcode/claude/codex/pi/opencode/hermes）按宿主单独关
+3. 配置解决不了才动注入器本体（卸宿主 hook/插件；恢复需重装）
+
+生效值核对用 `agenote config show`（优先级 env > file > default；env 前缀 `AGENOTE_INJECTION_*`）。
 
 ## 可视化
 

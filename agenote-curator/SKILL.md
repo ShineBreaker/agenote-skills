@@ -196,10 +196,25 @@ agenote memory --validate <ID>                  # N5 核实通过 → 刷新 VAL
 **编排要点**：
 
 - **import（摄取）**：新增记忆源 / 宿主记忆有实质更新后跑；先 `--dry-run` 看 imported / skipped / suspected_dup / conflicted / secret_blocked 五类清单，逐条复核再落盘。回声防护：export 目标路径下的文件自动跳过。
-- **export（投影）**：v1 仅 zcode/claude 聚合投影 + codex 建议清单；pi/reasonix/hermes 不做（待 Q4 黑盒验证）。跑前先看漂移报告：宿主改过聚合文件 → 不覆盖，走 import 重新裁决。
+- **export（投影，遗留通道）**：注入器（`agenote context`）落地后投影降级为遗留通道——同一份记忆经投影与注入双份进上下文属反模式，见 Step 8.6 双通道并存检测。v1 仅 zcode/claude 聚合投影 + codex 建议清单；pi/reasonix/hermes 不做（待 Q4 黑盒验证）。跑前先看漂移报告：宿主改过聚合文件 → 不覆盖，走 import 重新裁决。
 - **冲突队列**：`memory --conflicts` 只读列出；裁决优先级 human > 高 trust agent > 低 trust，同级比 VALIDATED_AT；落定用 `--supersede <新ID> <旧ID>`（新条写 SUPERSEDES + 刷 VALIDATED_AT，旧条进 deprecated 记 SUPERSEDED_BY），不用裸 add/update 组合以免漏步骤。
 - **重验队列**：`memory --revalidate` 只读列出（machine-key 变更批量标记 + 手填过期 + 孤儿）；核实通过 `--validate <ID>` 续期，不通过则 supersede/归档。E 类默认无时间过期——失效是事件（换机器/升系统）不是时间流逝。
 - 纪律：语义裁决一律 agent/人逐条确认，CLI 只出结构化候选，不做静默合并；批量上限沿用 Step 8 的 Andon 口径。
+
+### Step 8.6 — 注入器健康编排
+
+注入简报（`agenote context`，由各宿主注入器调 CLI 自动注入）已是事实层记忆的主通道，例行策展顺带体检。宿主检测与并存检测随注入架构落地，解读口径以 `agenote doctor` 实际输出为准：
+
+```bash
+agenote doctor                                             # 环境体检（含宿主自带记忆检测 + 双通道并存检测）
+agenote context --mode session --host zcode --budget 4000  # 抽样：看该宿主实际将注入的简报
+```
+
+解读 doctor 输出：
+
+- **宿主自带记忆检测**（zcode / claude / codex / omp / hermes 五项，只读探测；宿主未安装则跳过不计分）：目标态 = agenote 注入接管、宿主自带记忆关闭。某宿主报自带记忆仍开启 → 按 doctor 附带的指引改**该宿主自身**的配置（agenote 不代改宿主配置），下轮策展复查是否已关。
+- **双通道并存警告**（`[memories.targets]` 任一非空 且 `[injection] enabled=true`）：同一份记忆将经投影与注入双份进上下文。按退役指引处理：清空 targets 配置让注入成为唯一通道（projector 代码保留，配置层面 deprecated）；下轮复查 doctor 不再告警。
+- **context 简报抽样**：对启用了注入器的宿主各抽一次 `--mode session`，与 `memory --list` 比对——发现陈旧/该重验的条目转 Step 8.5 重验队列（`--revalidate` → `--validate` / `--supersede`）；确认末尾「如何查更多」指引仍可执行。json 输出三态 `status: ok|empty|disabled`（正常 / KB 无匹配 / 开关关闭）用于排障；简报按预算裁剪（先裁 R → F → P → E → U）属正常行为，不算缺陷。
 
 ### Step 9 — 重整与提交
 
@@ -230,6 +245,18 @@ commit message 以 `策展:` 前缀开头，50 字以内总结核心操作。无
 ### Step 10 — 输出报告
 
 格式见下方「报告格式」。
+
+## 注入器与开关
+
+注入行为由宿主注入器（各 agent 的插件/hook，自动调 `agenote context`）与 agenote 配置共同决定。与用户既有的 context-select 决策核（`~/.config/agents/context-select.sh`）两层并列：决策核注入**原则层**（怎么做事的稳定规范），agenote 注入**事实层**（动态更新、会裁决的记忆/画像）——不融合、不互斥、不重复。
+
+启停/调参**优先改 agenote 配置，再考虑物理移除注入器**（配置可逆，不必动宿主侧文件）：
+
+1. `~/.config/agenote/config.toml` 的 `[injection]` 节：`enabled = false` 一键全关；预算/召回参数（`default_budget` / `session_cumulative_budget` / `recall_topk` / `recall_min_score` 等）也在此节
+2. `[injection.hosts]` 平铺键 `<host>_enabled = false`（zcode/claude/codex/pi/opencode/hermes）按宿主单独关
+3. 配置解决不了才动注入器本体（卸宿主 hook/插件；恢复需重装）
+
+生效值核对用 `agenote config show`（优先级 env > file > default；env 前缀 `AGENOTE_INJECTION_*`）。注入器健康信号的例行解读见 Step 8.6。
 
 ## 策展原则
 
