@@ -72,7 +72,7 @@
 | 命令                  | 用法                                        | 说明                 |
 | --------------------- | ------------------------------------------- | -------------------- |
 | `agenote touch`       | `agenote touch <id> [--used-only] [--session SID]` | 更新时间戳（同会话幂等） |
-| `agenote sweep`       | `agenote sweep [--apply] [--json]`          | done→stale 降级（默认只读） |
+| `agenote sweep`       | `agenote sweep [--apply] [--json]`          | done/stable → stale 降级（默认只读；done 按未用天数，stable 按未验证天数） |
 | `agenote merge`       | `agenote merge <primary> <sec>...`          | 合并卡片             |
 | `agenote archive`     | `agenote archive <id...> [--reason]`        | 归档（批量）         |
 | `agenote archive`     | `agenote archive --stale`                   | 列出归档候选（只读） |

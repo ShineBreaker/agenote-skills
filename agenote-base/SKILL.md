@@ -74,7 +74,7 @@ EOF
 agenote init [--no-git]                  # 仅首次：创建目录结构 + git 仓库（--no-git 跳过 git）
 agenote touch <ID>                        # 留痕（USAGE_COUNT+1）
 agenote touch <ID> --session <SID>          # 同卡同会话只计一次 USAGE（防重复刷分）
-agenote sweep [--apply] [--json]            # done→stale 降级候选（默认只读清单）
+agenote sweep [--apply] [--json]            # done/stable → stale 降级候选（默认只读清单；done 按未用天数，stable 按未验证天数）
 agenote update <ID> --status done|stable|stale
 agenote update <ID> --append-to "关键发现" --append-text "新发现"
 agenote connect <A> <B> --desc "描述"     # 双向链接
@@ -114,14 +114,20 @@ agenote memory --touch F001 / agenote memory --archive F001
 
 F/R 序号由 CLI 自动分配（feedback 记 F 序号入 MEMORY.org `* feedback` 节，reference 记 R 序号，project 追加到 `memories/projects/<name>.org`），无需手工管理。模型细节见 [references/memory-model.md](references/memory-model.md)。
 
-### 记忆 SSOT 速查（N1 已落地；摄取/投影/重验系规划中）
+### 记忆 SSOT 速查（N1–N5 全链路已落地）
 
 ```
 agenote memory --list [--type U|F|P|E|R] [--scope S] [--json]  # 只读列出事实条目
+agenote memory --import [--source zcode|claude|codex|pi|reasonix|hermes|all] [--dry-run]  # 摄取导入（写命令；--dry-run 只预览，仍持锁）
+agenote memory --export [--type T] [--scope S] [--project P]  # 投影到宿主聚合文件（幂等+漂移检测）
+agenote memory --conflicts [--json]          # 冲突队列（只读）
+agenote memory --supersede <新ID> <旧ID>      # 裁决：新条记 SUPERSEDES，旧条入 deprecated
+agenote memory --revalidate                  # 待重验清单（只读）
+agenote memory --validate <ID>               # 刷新单条 VALIDATED_AT
 agenote dream --window-days 90 --limit 5     # 候选新卡片（只读；游标自动推进，唯一落盘是 dream-cursor.json）
 ```
 
-`memory import` / `export` / `--conflicts` / `--supersede` / `--validate` / `--revalidate` ——规划中，未落地，编排见 `agenote-curator`。
+日常单条增改仍走 `memory --add` / `--touch` / `--archive`；import/export/冲突裁决/重验属策展编排，流程见 `agenote-curator` Step 8.5。
 
 ## 可视化
 
