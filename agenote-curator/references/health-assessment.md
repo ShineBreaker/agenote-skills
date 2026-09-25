@@ -14,7 +14,7 @@ agenote health
 # 3. 列表全量（看实际写了什么）
 agenote list --all
 
-# 4. MEMORY.org 4 个分栏（feedback / project / reference / deprecated）
+# 4. MEMORY.org 6 个分栏（user / feedback / project / environment / reference / deprecated）
 cat ~/Documents/Org/agenote/MEMORY.org
 ```
 

@@ -45,16 +45,16 @@
 
 显式传入 `--type` 或 `--owner` 时，以显式值为准。
 
-## --status（状态，Phase 0 新增）
+## --status（状态，挂 `update` / `restore`）
 
-| 值         | 说明                   |
-| ---------- | ---------------------- |
-| `done`     | 写作完成（新建默认）   |
-| `stable`   | 经策展验证，长期有效   |
-| `stale`    | >30 天未 LAST_VERIFIED |
-| `archived` | 已归档                 |
+| 值         | 说明                                                       |
+| ---------- | ---------------------------------------------------------- |
+| `done`     | 写作完成（新建默认；>30 天未使用经 sweep 降级为 stale）    |
+| `stable`   | 经策展验证，长期有效（>90 天未验证经 sweep 降级为 stale）  |
+| `stale`    | 已降级（stale 且 >90 天未验证进入 `archive --stale` 候选） |
+| `archived` | 已归档                                                     |
 
-`--status stable` 时自动更新 LAST_VERIFIED 为当前时间。
+`update --status stable` 时自动更新 LAST_VERIFIED 为当前时间；`restore --status` 默认恢复到 `stable`。
 
 ## PROPERTIES 新增字段
 

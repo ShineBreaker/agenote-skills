@@ -58,7 +58,7 @@ done
 | 坑 | 表现 | 处置 |
 | --- | --- | --- |
 | extract 只吃单日 | `--date` 传范围不生效 | 循环单日 |
-| hermes 源重复导出（< v0.1.10） | 每天一份 117 条记忆 | 升级，或跳过 `hermes.org` |
+| hermes 源重复导出（< v0.1.10；源自 v0.1.12 退役，新抽取不再产出） | 每天一份 117 条记忆 | 升级，或跳过存量 `hermes.org` |
 | 相似度自动挂链 | 42 张新卡里 38 张被连到跨类别无关 hub | 按 category 限定候选 + 挂本类别 hub |
 | 子 agent 的 `evidence` 字段可能是 list | 批量脚本 `.strip()` 崩 | `str()` 兜底 |
 | `agenote list --all --json` 输出 >50KB | 工具截断导致 JSON 解析失败 | 重定向到文件再解析 |

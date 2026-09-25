@@ -46,7 +46,12 @@ echo "内容" | agenote memory --add --type feedback --title "偏好描述"
 ## 卡片生命周期
 
 ```
-done ─── 策展验证 ──→ stable ─── >30天未验证 ──→ stale ─── >90天 ──→ archived
-  ↑                                                                │
-  └──────────── agenote restore <id> ─────────────────────────────┘
+done ─── 策展验证 ──→ stable ─── >90天未验证 ──→ stale ─── >90天未验证 ──→ archived（候选清单）
+  │                                                                              ↑
+  └── >30天未使用 ──→ stale（sweep 降级路径）──────────────────────────────────┘
+        └──────────── agenote restore <id> 可恢复
 ```
+
+done → stale 按 `last_used`（`curation.stale_days`，默认 30 天）；stable → stale 与
+stale → archived 候选均按 `LAST_VERIFIED`（`curation.archive_days`，默认 90 天）。
+`agenote sweep` 列/执行 done+stable → stale 降级（默认 dry-run，`--apply` 落地）。

@@ -30,7 +30,7 @@ description: 会话后经验采集与留痕。**触发信号**：agenote-hooks �
     本轮用到了哪些外部资料？
     ├─ 来自 agenote/人类KB 的已有卡片 → agenote touch <ID>
     └─ 来自联网的新知识
-        ├─ 已确认有用（实际应用到代码/答案）→ agenote add --type note ...
+        ├─ 已确认有用（实际应用到代码/答案）→ agenote add --entry note ...
         └─ 仅浏览未采用 → 不记录（避免噪音）
 
 如果既无经验信号、又无留痕需求 → 明确回复"本次无可记录经验"
@@ -49,13 +49,17 @@ description: 会话后经验采集与留痕。**触发信号**：agenote-hooks �
 
 ### 记忆信号（写入 MEMORY.org）
 
-| 信号类型 | 记忆类型  | 关键词/信号                          | 写入命令                                             |
-| -------- | --------- | ------------------------------------ | ---------------------------------------------------- |
-| 偏好表达 | feedback  | "我喜欢..."、"不要..."、"停..."      | `agenote memory --add --type feedback`               |
-| 行为纠正 | feedback  | 用户纠正了你的工作方式（非技术错误） | `agenote memory --add --type feedback`               |
-| 习惯模式 | feedback  | 同一偏好出现 ≥2 次                   | `agenote memory --add --type feedback`               |
-| 项目决策 | project   | 不可从代码推导的项目级决策/状态      | `agenote memory --add --type project --project <id>` |
-| 外部指针 | reference | 外部系统/文档/资源的位置信息         | `agenote memory --add --type reference`              |
+| 信号类型 | 记忆类型    | 关键词/信号                          | 写入命令                                               |
+| -------- | ----------- | ------------------------------------ | ------------------------------------------------------ |
+| 用户画像 | user        | 用户角色/目标/稳定背景，无法从代码推导 | `agenote memory --add --type user`                     |
+| 偏好表达 | feedback    | "我喜欢..."、"不要..."、"停..."      | `agenote memory --add --type feedback`                 |
+| 行为纠正 | feedback    | 用户纠正了你的工作方式（非技术错误） | `agenote memory --add --type feedback`                 |
+| 习惯模式 | feedback    | 同一偏好出现 ≥2 次                   | `agenote memory --add --type feedback`                 |
+| 项目决策 | project     | 不可从代码推导的项目级决策/状态      | `agenote memory --add --type project --project <slug>` |
+| 环境约束 | environment | 机器/OS/工具链的不可推导约束         | `agenote memory --add --type environment`              |
+| 外部指针 | reference   | 外部系统/文档/资源的位置信息         | `agenote memory --add --type reference`                |
+
+`--project <slug>` 填项目/工作区 slug（目录名或宿主 `projects/<slug>` 原名）；带分区键的条目只在对应项目上下文注入。memory 写入有 secret 门禁——命中密钥形态即拒写，确认误判用 `--allow-secret` 豁免；含敏感内容但需留存时用 `--sensitivity <LEVEL>` 标记（不注入不投影，仅存 SSOT）。
 
 **MEMORY vs KB 边界**："你怎么做"（风格/流程/工具选择偏好）→ MEMORY；"你做错了"（事实/技术错误）→ KB。同一事件可能两者并存。技术性纠正（"正则写错了"、"参数传反了"）只写 KB；普通确认（"好的"、"行"）不触发任何写入。
 

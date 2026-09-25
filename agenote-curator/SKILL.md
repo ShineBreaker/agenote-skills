@@ -125,7 +125,7 @@ agenote reconcile --source all [--dry-run]
 **dream 综合**（Agent 综合阶段，从 reconcile 事实提炼新 KB 卡片）——`agenote dream` 返回 ≤limit 个候选，每个含 `term` / `frequency` / `score` / `representative_title` / `representative_content` / `source_trace` / `suggested_category` / `source_facts`。**dream 不自动写 KB**，综合决策流程：
 
 1. 读 dream 候选的 `representative_content`（**索引层摘要，已截断**）
-2. 需深入判断时调 `agenote trace --id <candidate.source_trace>` 读完整原始对话（含工具调用/推理/补丁；未实现 trace_session 的源——hermes/crush/codex/claude——降级返回索引层摘要，看到的内容与 dream 候选同级）。token 经济性：按需展开，不要无差别调——dream 的 `score` 反映"统计上像经验词"，trace 让你确认"语义上确实是有用经验"
+2. 需深入判断时调 `agenote trace --id <candidate.source_trace>` 读完整原始对话（含工具调用/推理/补丁；未实现 trace_session 的源——crush/codex/claude——降级返回索引层摘要，看到的内容与 dream 候选同级）。token 经济性：按需展开，不要无差别调——dream 的 `score` 反映"统计上像经验词"，trace 让你确认"语义上确实是有用经验"
 3. 应用下方「策展原则」判断是否值得沉淀
 4. 值得 → `agenote add --title ... --entry note --category <suggested_category> --stdin`，正文引用 `source_facts` 中的 ID 以保留溯源
 5. 已被现有 KB 卡片覆盖 → 跳过（或 `agenote touch <已有ID>` 标记复用）
@@ -196,7 +196,7 @@ agenote memory --validate <ID>                  # N5 核实通过 → 刷新 VAL
 **编排要点**：
 
 - **import（摄取）**：新增记忆源 / 宿主记忆有实质更新后跑；先 `--dry-run` 看 imported / skipped / suspected_dup / conflicted / secret_blocked 五类清单，逐条复核再落盘。回声防护：export 目标路径下的文件自动跳过。
-- **export（投影，遗留通道）**：注入器（`agenote context`）落地后投影降级为遗留通道——同一份记忆经投影与注入双份进上下文属反模式，见 Step 8.6 双通道并存检测。v1 仅 zcode/claude 聚合投影 + codex 建议清单；pi/reasonix/hermes 不做（待 Q4 黑盒验证）。跑前先看漂移报告：宿主改过聚合文件 → 不覆盖，走 import 重新裁决。
+- **export（投影，遗留通道）**：注入器（`agenote context`）落地后投影降级为遗留通道——同一份记忆经投影与注入双份进上下文属反模式，见 Step 8.6 双通道并存检测。六宿主均已覆盖：zcode/claude 聚合投影到宿主记忆文件；codex/pi/hermes 写 `agenote-suggestions.md` 建议清单（宿主启动时自行采纳）；reasonix 按 `--project <slug>` per-entry 直写既有 slug 目录（不新建目录）。跑前先看漂移报告：宿主改过聚合/投影文件 → 不覆盖，走 import 重新裁决。
 - **冲突队列**：`memory --conflicts` 只读列出；裁决优先级 human > 高 trust agent > 低 trust，同级比 VALIDATED_AT；落定用 `--supersede <新ID> <旧ID>`（新条写 SUPERSEDES + 刷 VALIDATED_AT，旧条进 deprecated 记 SUPERSEDED_BY），不用裸 add/update 组合以免漏步骤。
 - **重验队列**：`memory --revalidate` 只读列出（machine-key 变更批量标记 + 手填过期 + 孤儿）；核实通过 `--validate <ID>` 续期，不通过则 supersede/归档。E 类默认无时间过期——失效是事件（换机器/升系统）不是时间流逝。
 - 纪律：语义裁决一律 agent/人逐条确认，CLI 只出结构化候选，不做静默合并；批量上限沿用 Step 8 的 Andon 口径。

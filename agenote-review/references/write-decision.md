@@ -14,7 +14,11 @@
     │
     ├─ 是偏好/习惯吗？ ────────── agenote memory --add --type feedback
     │
-    ├─ 是项目决策吗？ ────────── agenote memory --add --type project
+    ├─ 是用户画像吗？ ────────── agenote memory --add --type user
+    │
+    ├─ 是项目决策吗？ ────────── agenote memory --add --type project --project <slug>
+    │
+    ├─ 是环境约束吗？ ────────── agenote memory --add --type environment
     │
     └─ 是外部资源位置？ ──────── agenote memory --add --type reference
 ```

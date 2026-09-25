@@ -120,13 +120,13 @@
 - `window_days`：时间窗口（天），默认 90 覆盖 ~90% facts。0=不过滤。`0/7/30/90/180` 窗口在真实数据上分别幸存 100%/7%/37%/93%/100% facts
 - `offset`：跳过前 N 个候选（多轮抽取跳过噪声词）。**注意 offset 不稳定**：候选排序随 reconcile 索引更新漂移，`report.snapshot_hash` 标识本次候选集指纹——两次调用指纹不同即说明排序已变，同一 offset 可能指向不同候选
 - `limit`：本次最多返回 N 个候选（默认 5）
-- 无 timestamp 的 fact（hermes 30 条）**默认保留**，不受窗口影响
+- 无 timestamp 的 fact **默认保留**，不受窗口影响
 
 ### 为什么需要 trace
 
 reconcile 索引层 `content` 是 extractor 建索引时的**截断摘要**（opencode/zcode：user 截 1000 字、assistant 截 2000 字、tool/patch 退化为 `[tool: name]` 标记）。要判断一个 dream 候选是否真的有具体经验价值，必须读真实完整对话——这正是 `agenote trace` 的职责。dream 候选的 `score` 反映"统计上像经验词"，`agenote trace` 让你确认"语义上确实是有用经验"。
 
-**降级行为**：只有实现了 trace_session 的源（opencode/pi/zcode）能返回完整对话；hermes/crush/codex/claude 未实现，trace 降级返回索引层摘要——对这些源，深入判断只能回到 `conversations/<date>/` 原始文件。
+**降级行为**：只有实现了 trace_session 的源（opencode/omp/zcode）能返回完整对话；crush/codex/claude 未实现，trace 降级返回索引层摘要——对这些源，深入判断只能回到 `conversations/<date>/` 原始文件。
 
 ### token 经济与质量门槛
 
@@ -173,13 +173,13 @@ WEIGHT = 基础权重 × 使用系数 × 新鲜度系数
 新鲜度系数: last_used 超 STALE_DAYS(30天) → 0.8，否则 1.0
 ```
 
-**reconcile 权重梯度**：hermes / pi = 0.7（自家或信任度高）；opencode / crush / codex / claude = 0.6（外部源，略低避免淹没 KB）。
+**reconcile 权重梯度**：opencode / omp / zcode / crush = 0.7（`weights.reconcile_default`，自家或信任度高）；codex / claude = 0.6（外部源，`weights.reconcile_default + weights.external_delta`，略低避免淹没 KB）。
 
 ## 数据源注册
 
-### 会话抽取源（extract，当前 7 源）
+### 会话抽取源（extract，当前 6 源）
 
-opencode / crush / codex / claude / pi / hermes / zcode。抽取器实现在 `agenote/extract/`，源列表与路径以代码为准。新增源参考任一现有 extractor 的签名 `() -> tuple[list[ReconciledFact], list[str]]`，在 `agenote/extract/__init__.py` 的 `_resolve_extractors()` 注册即可。
+opencode / crush / codex / claude / omp / zcode。注意 pi 宿主在 extract 侧的注册名是 `omp`（与 scan-memories 侧的 `pi` 是同一宿主两个注册名）。hermes 会话源自 v0.1.12 退役（SQLite 布局不再跟随），仅保留 `scan-memories --source hermes` 只读记忆扫描。抽取器实现在 `agenote/extract/`，源列表与路径以代码为准。新增源参考任一现有 extractor 的签名 `() -> tuple[list[ReconciledFact], list[str]]`，在 `agenote/extract/base.py` 的 `_resolve_extractors()` 注册即可。
 
 ### 记忆库扫描源（scan-memories，6 源）
 
