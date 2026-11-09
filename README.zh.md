@@ -1,3 +1,5 @@
+> **已归档 / 已迁移。** 本仓库已迁移至 monorepo https://github.com/ShineBreaker/agenote ，不再维护。请到该仓的 [`packages/agenote-skills/`](https://github.com/ShineBreaker/agenote/tree/main/packages/agenote-skills)。
+
 # agenote-skills：agent 行为规范
 
 一套行为规范，所有 agent 共用。

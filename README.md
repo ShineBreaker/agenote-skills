@@ -1,3 +1,5 @@
+> **Archived / moved.** This repository has been migrated into the monorepo https://github.com/ShineBreaker/agenote and is no longer maintained. See [`packages/agenote-skills/`](https://github.com/ShineBreaker/agenote/tree/main/packages/agenote-skills) there.
+
 # agenote-skills: agent behavior specs
 
 One behavior spec, shared by every agent.
